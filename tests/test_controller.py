@@ -882,3 +882,56 @@ async def test_a_hold_survives_a_reload(
     # THEN
     assert hass.states.get(STATE).state == "manual_hold"
     assert hass.states.get(HOLD_ENDS).state == hold_ends
+
+
+SCHEDULE_STATUS = "sensor.house_room_schedule"
+
+
+async def test_no_schedule_is_a_normal_state(hass: HomeAssistant, thermostat_calls: AsyncMock) -> None:
+    # GIVEN
+    set_thermostat(hass)
+    set_rooms(hass)
+
+    # WHEN
+    await _setup(hass)
+
+    # THEN
+    status = hass.states.get(SCHEDULE_STATUS)
+    assert status.state == "not_configured"
+    assert status.attributes["schedule_entity"] is None
+    assert hass.states.get(PROBLEM).state == STATE_OFF
+
+
+@pytest.mark.parametrize(("schedule_state", "expected"), [(STATE_ON, "in_block"), (STATE_OFF, "between_blocks")])
+async def test_the_schedule_status_follows_the_schedule(
+    hass: HomeAssistant, thermostat_calls: AsyncMock, schedule_state: str, expected: str
+) -> None:
+    # GIVEN
+    _set_schedule(hass, schedule_state, next_event="2026-01-01T22:00:00+00:00")
+    set_thermostat(hass)
+    set_rooms(hass)
+
+    # WHEN
+    await _setup(hass, **{CONF_SCHEDULE_ENTITY: SCHEDULE})
+
+    # THEN
+    status = hass.states.get(SCHEDULE_STATUS)
+    assert status.state == expected
+    assert status.attributes == status.attributes | {
+        "schedule_entity": SCHEDULE,
+        "next_change": "2026-01-01T22:00:00+00:00",
+    }
+
+
+async def test_a_missing_schedule_is_a_problem(hass: HomeAssistant, thermostat_calls: AsyncMock) -> None:
+    # GIVEN
+    set_thermostat(hass)
+    set_rooms(hass)
+
+    # WHEN
+    await _setup(hass, **{CONF_SCHEDULE_ENTITY: SCHEDULE})
+
+    # THEN
+    assert hass.states.get(SCHEDULE_STATUS).state == "not_found"
+    assert hass.states.get(PROBLEM).attributes["reasons"] == [f"schedule {SCHEDULE} not found"]
+    assert hass.states.get(SCHEDULE_STATUS).attributes["next_change"] is None

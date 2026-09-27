@@ -47,6 +47,15 @@ class ControlState(StrEnum):
     UNDERLYING_UNAVAILABLE = "underlying_unavailable"
 
 
+class ScheduleStatus(StrEnum):
+    """Whether a schedule steers the room thermostat right now."""
+
+    NOT_CONFIGURED = "not_configured"
+    IN_BLOCK = "in_block"
+    BETWEEN_BLOCKS = "between_blocks"
+    NOT_FOUND = "not_found"
+
+
 class ManualChangePolicy(StrEnum):
     """What to do when someone changes the thermostat outside Home Assistant."""
 

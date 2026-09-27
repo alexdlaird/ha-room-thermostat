@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Any, Final
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -15,7 +15,7 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import EntityCategory
 
-from .control import ControlState
+from .control import ControlState, ScheduleStatus
 from .entity import RoomThermostatEntity
 
 if TYPE_CHECKING:
@@ -79,6 +79,12 @@ SENSORS: Final[tuple[RoomSensorDescription, ...]] = (
         value_fn=lambda snapshot: snapshot.hold_until,
     ),
     RoomSensorDescription(
+        key="schedule",
+        device_class=SensorDeviceClass.ENUM,
+        options=[status.value for status in ScheduleStatus],
+        value_fn=lambda snapshot: snapshot.schedule.value,
+    ),
+    RoomSensorDescription(
         key="control_state",
         device_class=SensorDeviceClass.ENUM,
         options=[state.value for state in ControlState],
@@ -108,3 +114,13 @@ class RoomSensor(RoomThermostatEntity, SensorEntity):
     @property
     def native_value(self) -> StateType | datetime:
         return self.entity_description.value_fn(self.controller.snapshot)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        if self.entity_description.key != "schedule":
+            return None
+        next_change = self.controller.snapshot.schedule_next_change
+        return {
+            "schedule_entity": self.controller.schedule_entity_id,
+            "next_change": None if next_change is None else next_change.isoformat(),
+        }

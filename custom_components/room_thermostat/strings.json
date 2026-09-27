@@ -104,6 +104,15 @@
       },
       "hold_ends": {
         "name": "Hold ends"
+      },
+      "schedule": {
+        "name": "Schedule",
+        "state": {
+          "not_configured": "Not configured",
+          "in_block": "In a block",
+          "between_blocks": "Between blocks",
+          "not_found": "Schedule not found"
+        }
       }
     },
     "binary_sensor": {

@@ -23,6 +23,13 @@
       },
       "hold_ends": {
         "default": "mdi:timer-sand"
+      },
+      "schedule": {
+        "default": "mdi:calendar-clock",
+        "state": {
+          "not_configured": "mdi:calendar-blank-outline",
+          "not_found": "mdi:calendar-alert"
+        }
       }
     },
     "button": {

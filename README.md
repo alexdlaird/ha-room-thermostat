@@ -91,6 +91,7 @@ and listed on the *Control problem* sensor.
 | `sensor.<name>_room_error` | Room temperature minus its target (0 inside a heat_cool range). |
 | `sensor.<name>_room_offset` | The offset applied. Diagnostic. |
 | `sensor.<name>_commanded_heat_setpoint` / `_commanded_cool_setpoint` | What the real thermostat should be set to. Diagnostic. |
+| `sensor.<name>_schedule` | `not_configured` (no schedule: a normal state), `in_block`, `between_blocks`, or `not_found` (configured but missing, also a control problem). Attributes: `schedule_entity`, `next_change`. |
 | `sensor.<name>_hold_ends` | When the current manual hold ends (unknown when not holding). |
 | `sensor.<name>_control_state` | `controlling`, `fallback_reference`, `fallback_thermostat`, `manual_hold`, `idle`, `underlying_unavailable`. Diagnostic. |
 | `binary_sensor.<name>_control_problem` | On during any fallback, schedule data error, failed write or unavailable thermostat; `reasons` lists them. |

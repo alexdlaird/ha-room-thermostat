@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 import logging
 from typing import TYPE_CHECKING, Any, Final
@@ -79,6 +79,7 @@ from .control import (
     ManualChangePolicy,
     OffsetFilter,
     RoomReading,
+    ScheduleStatus,
     Selection,
     Setpoints,
     Settings,
@@ -134,6 +135,9 @@ class Snapshot:
     error: float | None = None
     problems: tuple[str, ...] = ()
     hold_until: datetime | None = None
+    schedule: ScheduleStatus = ScheduleStatus.NOT_CONFIGURED
+    #: When the schedule next starts or ends a block (from the schedule helper's `next_event`).
+    schedule_next_change: datetime | None = None
 
 
 def room_id_for(entity_id: str) -> str:
@@ -456,15 +460,30 @@ class RoomThermostatController:
             value = TemperatureConverter.convert(value, unit, self.unit)
         return RoomReading(value, state.last_reported)
 
+    def _schedule_status(self) -> tuple[ScheduleStatus, datetime | None]:
+        if not self.schedule_entity_id:
+            return ScheduleStatus.NOT_CONFIGURED, None
+        state = self.hass.states.get(self.schedule_entity_id)
+        if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            return ScheduleStatus.NOT_FOUND, None
+        next_event = state.attributes.get("next_event")
+        if isinstance(next_event, str):
+            next_event = dt_util.parse_datetime(next_event)
+        status = ScheduleStatus.IN_BLOCK if state.state == STATE_ON else ScheduleStatus.BETWEEN_BLOCKS
+        return status, next_event if isinstance(next_event, datetime) else None
+
     def _problems(self, choice_state: ControlState) -> tuple[str, ...]:
         problems = [PROBLEM_BY_STATE[choice_state]] if choice_state in PROBLEM_BY_STATE else []
+        if self._schedule_status()[0] is ScheduleStatus.NOT_FOUND:
+            problems.append(f"schedule {self.schedule_entity_id} not found")
         problems.extend(f"schedule: {error}" for error in self._block_errors)
         if self._write_error is not None:
             problems.append(f"write failed: {self._write_error}")
         return tuple(problems)
 
     def _publish(self, snapshot: Snapshot) -> None:
-        self.snapshot = snapshot
+        status, next_change = self._schedule_status()
+        self.snapshot = replace(snapshot, schedule=status, schedule_next_change=next_change)
         for update in list(self._listeners):
             update()
 
