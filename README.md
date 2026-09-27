@@ -67,9 +67,43 @@ Everything else is under **Configure** (saving reloads the integration):
 | Setpoint step | 0.5 | |
 | Minimum heat/cool range | 0 | Set this to your thermostat's heat/cool deadband if it enforces one (many do), so room ranges that it would reject are refused up front. |
 
-### Schedules
+### Presets, schedule and holds
 
-Add a Schedule helper and, on any time block, open **Additional data** and set any of:
+Every room thermostat has presets: **Home**, **Away** and **Sleep** (built in; their targets and
+rooms are editable, and Home starts from what the thermostat runs today) plus any custom ones, such
+as *Movie night*. A preset is a pair of room targets and the room(s) to follow. Choose one with
+`climate.set_preset_mode` (for example from a presence automation that switches to Away).
+
+The weekly schedule is a list of (time → preset) blocks per day; a block stays in effect until the
+next one, across midnight and the end of the week. Presets and the schedule are edited from an app
+through the WebSocket API below, which every Home Assistant user may call (Schedule helpers can only
+be edited by admins).
+
+A change made through Home Assistant (targets, the active room, a preset) is a **hold** that
+outranks the schedule: by default until the next block; or for a number of minutes (it then returns
+to the schedule, or to what ran before if there is none); or until someone resumes. **Resume** ends
+any hold and returns to the schedule. A `room_thermostat_override_ended` event fires when such a hold
+ends (`reason`: `expired`, `resumed` or `schedule`).
+
+#### WebSocket API
+
+Each command takes `entity_id` (the room thermostat's climate entity) and answers with the
+thermostat's config: `revision`, `unit`, `setpoint_step`, `minimum_range`, `rooms`, `presets`,
+`schedule`, `active_preset`, `hold`, `selection`. The climate entity's `config_revision` attribute
+changes whenever presets or the schedule do.
+
+| Command | Data |
+| --- | --- |
+| `room_thermostat/config` | |
+| `room_thermostat/presets/save` | `presets`: the full list, `[{id?, name, heat, cool, room}]`; omit `id` for a new preset. Built-ins cannot be removed, nor presets the schedule uses. |
+| `room_thermostat/schedule/save` | `schedule`: seven day lists, Monday first, of `{time: "HH:MM", preset: id}`. |
+| `room_thermostat/set` | Any of `preset`, `heat`, `cool`, `room`, plus `hold`: `{kind: next_block}` (default), `{kind: minutes, minutes: N}` or `{kind: indefinite}`. |
+| `room_thermostat/resume` | |
+
+#### Schedule helper (alternative)
+
+Instead of the built-in schedule, a Schedule helper can drive the thermostat; it is used only while
+the built-in schedule is empty. On any time block, open **Additional data** and set any of:
 
 ```yaml
 room: bedroom   # a room id or name, or average / extreme
@@ -77,7 +111,7 @@ heat: 66        # room heat target
 cool: 74        # room cool target
 ```
 
-When a block starts, its values are applied and any hold or manual choice ends. Keys a block leaves
+When a block starts, its values are applied and any hold ends. Keys a block leaves
 out keep their current value. Outside blocks, the default room applies. Invalid values are skipped
 and listed on the *Control problem* sensor.
 
@@ -85,17 +119,17 @@ and listed on the *Control problem* sensor.
 
 | Entity | |
 | --- | --- |
-| `climate.<name>` | The room thermostat: current temperature is the room's, targets are room targets (single in heat/cool, a range in heat_cool). Modes, action and limits mirror the real thermostat, and mode changes pass straight through to it. |
+| `climate.<name>` | The room thermostat: current temperature is the room's, targets are room targets (single in heat/cool, a range in heat_cool). Modes, fan modes, action and limits mirror the real thermostat, and mode and fan changes pass straight through to it. Preset modes are the presets. Attributes include `preset_id`, `override` (the current hold: `kind`, `until`), `schedule_next_change` and `config_revision`. |
 | `select.<name>_active_room` | Each room, *Average of all rooms*, *Room most off target* (coldest when heating, hottest when cooling, furthest outside the range in heat_cool). A choice stands until the next schedule block. |
 | `sensor.<name>_room_temperature` | The temperature being controlled to. |
 | `sensor.<name>_room_error` | Room temperature minus its target (0 inside a heat_cool range). |
 | `sensor.<name>_room_offset` | The offset applied. Diagnostic. |
 | `sensor.<name>_commanded_heat_setpoint` / `_commanded_cool_setpoint` | What the real thermostat should be set to. Diagnostic. |
-| `sensor.<name>_schedule` | `not_configured` (no schedule: a normal state), `in_block`, `between_blocks`, or `not_found` (configured but missing, also a control problem). Attributes: `schedule_entity`, `next_change`. |
+| `sensor.<name>_schedule` | `not_configured` (no schedule: a normal state), `in_block` (always, with the built-in schedule), `between_blocks`, or `not_found` (a Schedule helper that is configured but missing, also a control problem). Attributes: `schedule_entity`, `next_change`. |
 | `sensor.<name>_hold_ends` | When the current manual hold ends (unknown when not holding). |
 | `sensor.<name>_control_state` | `controlling`, `fallback_reference`, `fallback_thermostat`, `manual_hold`, `idle`, `underlying_unavailable`. Diagnostic. |
 | `binary_sensor.<name>_control_problem` | On during any fallback, schedule data error, failed write or unavailable thermostat; `reasons` lists them. |
-| `button.<name>_resume` | Ends a hold. |
+| `button.<name>_resume` | Ends a hold and returns to the schedule. |
 
 ### Alerts
 
@@ -105,6 +139,7 @@ The integration raises no notifications itself. Automate on `binary_sensor.<name
 - `room_thermostat_manual_change`: `policy`, `mode`, `heat`, `cool`, and `hold_until` (ISO time, or
   null when holding indefinitely or adopting).
 - `room_thermostat_hold_ended`: `reason` is `expired`, `resumed` or `schedule`.
+- `room_thermostat_override_ended`: a hold set through Home Assistant ended; same reasons.
 
 "Outside Home Assistant" means any setpoint change this integration did not make: the vendor's app,
 the thermostat's own screen, or the underlying climate entity. It is noticed at the underlying

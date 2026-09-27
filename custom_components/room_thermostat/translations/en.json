@@ -132,6 +132,9 @@
     },
     "single_target_not_applicable": {
       "message": "This mode has no single target temperature."
+    },
+    "unknown_preset": {
+      "message": "There is no preset named {preset}."
     }
   }
 }

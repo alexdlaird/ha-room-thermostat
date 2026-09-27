@@ -4,13 +4,24 @@ from __future__ import annotations
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.typing import ConfigType
 
-from .const import PLATFORMS
+from . import websocket
+from .const import DOMAIN, PLATFORMS
 from .controller import RoomThermostatController
 
 type RoomThermostatConfigEntry = ConfigEntry[RoomThermostatController]
 
-__all__ = ["RoomThermostatConfigEntry", "async_setup_entry", "async_unload_entry"]
+__all__ = ["CONFIG_SCHEMA", "RoomThermostatConfigEntry", "async_setup", "async_setup_entry", "async_unload_entry"]
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register the WebSocket commands apps use (see websocket.py)."""
+    websocket.async_register(hass)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: RoomThermostatConfigEntry) -> bool:

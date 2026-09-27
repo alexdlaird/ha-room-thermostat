@@ -17,12 +17,14 @@ from typing import TYPE_CHECKING, Any, Final
 
 from homeassistant.components.climate.const import (
     ATTR_CURRENT_TEMPERATURE,
+    ATTR_FAN_MODE,
     ATTR_HVAC_MODE,
     ATTR_MAX_TEMP,
     ATTR_MIN_TEMP,
     ATTR_TARGET_TEMP_HIGH,
     ATTR_TARGET_TEMP_LOW,
     DOMAIN as CLIMATE_DOMAIN,
+    SERVICE_SET_FAN_MODE,
     SERVICE_SET_HVAC_MODE,
     SERVICE_SET_TEMPERATURE,
     HVACMode,
@@ -72,6 +74,8 @@ from .const import (
     EVALUATE_INTERVAL_SECONDS,
     EVENT_HOLD_ENDED,
     EVENT_MANUAL_CHANGE,
+    EVENT_OVERRIDE_ENDED,
+    PRESET_DEFAULTS_BY_UNIT,
 )
 from .control import (
     ControlState,
@@ -96,6 +100,27 @@ from .control import (
     parse_selection,
     room_error,
     write_allowed,
+)
+from .planner import (
+    EMPTY_SCHEDULE,
+    Hold,
+    HoldKind,
+    PlanError,
+    Preset,
+    Schedule,
+    active_block,
+    default_presets,
+    hold_from_dict,
+    hold_to_dict,
+    missing_presets,
+    next_block_start,
+    parse_presets,
+    parse_schedule,
+    preset_to_dict,
+    presets_from_storage,
+    schedule_from_storage,
+    schedule_to_list,
+    selection_to_str,
 )
 
 if TYPE_CHECKING:
@@ -138,6 +163,8 @@ class Snapshot:
     schedule: ScheduleStatus = ScheduleStatus.NOT_CONFIGURED
     #: When the schedule next starts or ends a block (from the schedule helper's `next_event`).
     schedule_next_change: datetime | None = None
+    #: The hold set through Home Assistant (dial, preset, app), if any.
+    override: Hold | None = None
 
 
 def room_id_for(entity_id: str) -> str:
@@ -234,6 +261,16 @@ class RoomThermostatController:
         self.hold_until: datetime | None = None
         self.filters: dict[str, OffsetFilter] = {}
         self.block_signature: list[Any] | None = None
+        self.presets: dict[str, Preset] = {}
+        self.schedule: Schedule = EMPTY_SCHEDULE
+        self.active_preset: str | None = None
+        self.override: Hold | None = None
+        #: What to return to when a timed hold ends and no schedule block applies: targets, selection, preset.
+        self.baseline: tuple[Setpoints, Selection, str | None] | None = None
+        #: (weekday, index, start, preset) of the internal schedule block last applied.
+        self.block_key: list[Any] | None = None
+        #: Bumped whenever presets or the schedule change, so clients know to re-read them.
+        self.config_revision = 0
         self.last_commanded: Setpoints | None = None
         self.last_write_at: datetime | None = None
         self.snapshot = Snapshot()
@@ -255,6 +292,7 @@ class RoomThermostatController:
         underlying = self.hass.states.get(self.climate_entity_id)
         if self.targets.heat is None or self.targets.cool is None:
             self.targets = self._initial_targets(underlying)
+        self._ensure_built_in_presets()
         self._previous_mode = live_mode(underlying)
         self._previous_setpoints = current_setpoints(underlying, self._previous_mode)
 
@@ -265,7 +303,8 @@ class RoomThermostatController:
         self.entry.async_on_unload(
             async_track_time_interval(self.hass, self._async_on_tick, timedelta(seconds=EVALUATE_INTERVAL_SECONDS))
         )
-        self._apply_schedule_if_changed()
+        if not self.uses_internal_schedule:
+            self._apply_schedule_if_changed()
         self.evaluate()
 
     @callback
@@ -298,7 +337,7 @@ class RoomThermostatController:
         entity_id = event.data["entity_id"]
         if entity_id == self.climate_entity_id:
             self._observe_underlying(event.data["new_state"])
-        elif entity_id == self.schedule_entity_id:
+        elif entity_id == self.schedule_entity_id and not self.uses_internal_schedule:
             self._apply_schedule_if_changed()
         self.evaluate()
 
@@ -372,8 +411,50 @@ class RoomThermostatController:
             self.selection = self.default_selection
             self._block_errors = ()
         self._end_hold("schedule")
+        self._end_override("schedule")
         self._urgent = True
         self._save()
+
+    @property
+    def uses_internal_schedule(self) -> bool:
+        """The schedule edited through Home Assistant (presets per time of day); it replaces a schedule helper."""
+        return any(self.schedule)
+
+    def _apply_internal_schedule_if_changed(self, now: datetime) -> None:
+        """A new block applies its preset and ends a next-block hold; timed and indefinite holds outrank it."""
+        if not self.uses_internal_schedule:
+            self.block_key = None
+            return
+        found = active_block(self.schedule, dt_util.as_local(now))
+        if found is None:  # pragma: no cover - a non-empty schedule always has a block in effect
+            return
+        weekday, index, block = found
+        key = [weekday, index, block.start.strftime("%H:%M"), block.preset_id]
+        if key == self.block_key:
+            return
+        self.block_key = key
+        if self.override is not None and self.override.kind is not HoldKind.NEXT_BLOCK:
+            self._save()
+            return
+        self._apply_preset(self.presets[block.preset_id])
+        self._end_hold("schedule")
+        self._end_override("schedule")
+        self._urgent = True
+        self._save()
+
+    def _apply_preset(self, preset: Preset) -> None:
+        self.targets = preset.targets
+        self.selection = preset.selection
+        self.active_preset = preset.preset_id
+
+    def _return_to_plan(self) -> None:
+        """After a hold: the schedule's current preset, else whatever was in effect before the hold."""
+        if self.uses_internal_schedule:
+            self.block_key = None
+            self._apply_internal_schedule_if_changed(dt_util.utcnow())
+        elif self.baseline is not None:
+            self.targets, self.selection, self.active_preset = self.baseline
+        self.baseline = None
 
     # --------------------------------------------------------------- evaluation
 
@@ -385,6 +466,12 @@ class RoomThermostatController:
             self._end_hold("expired")
             self._urgent = True
             self._save()
+        if self.override is not None and self.override.expired(now):
+            self._end_override("expired")
+            self._return_to_plan()
+            self._urgent = True
+            self._save()
+        self._apply_internal_schedule_if_changed(now)
         underlying = self.hass.states.get(self.climate_entity_id)
         thermostat_temperature = (
             None
@@ -461,6 +548,8 @@ class RoomThermostatController:
         return RoomReading(value, state.last_reported)
 
     def _schedule_status(self) -> tuple[ScheduleStatus, datetime | None]:
+        if self.uses_internal_schedule:
+            return ScheduleStatus.IN_BLOCK, next_block_start(self.schedule, dt_util.now())
         if not self.schedule_entity_id:
             return ScheduleStatus.NOT_CONFIGURED, None
         state = self.hass.states.get(self.schedule_entity_id)
@@ -483,7 +572,7 @@ class RoomThermostatController:
 
     def _publish(self, snapshot: Snapshot) -> None:
         status, next_change = self._schedule_status()
-        self.snapshot = replace(snapshot, schedule=status, schedule_next_change=next_change)
+        self.snapshot = replace(snapshot, schedule=status, schedule_next_change=next_change, override=self.override)
         for update in list(self._listeners):
             update()
 
@@ -510,8 +599,10 @@ class RoomThermostatController:
 
     # --------------------------------------------------------- user-facing setters
 
-    async def async_set_targets(self, heat: float | None = None, cool: float | None = None) -> None:
-        """New room targets from the room thermostat; they stand until the next schedule block."""
+    async def async_set_targets(
+        self, heat: float | None = None, cool: float | None = None, hold: Hold | None = None
+    ) -> None:
+        """New room targets; by default they stand until the next schedule block."""
         new = Setpoints(self.targets.heat if heat is None else heat, self.targets.cool if cool is None else cool)
         if (
             heat is not None
@@ -529,12 +620,33 @@ class RoomThermostatController:
             new = Setpoints(new.heat, max(new.cool, new.heat + self.settings.minimum_range))
         if cool is not None and heat is None and new.cool is not None and new.heat is not None:
             new = Setpoints(min(new.heat, new.cool - self.settings.minimum_range), new.cool)
+        self._start_override(hold)
         self.targets = new
+        self.active_preset = None
         self._resume()
 
-    async def async_set_selection(self, selection: Selection) -> None:
+    async def async_set_selection(self, selection: Selection, hold: Hold | None = None) -> None:
+        self._start_override(hold)
         self.selection = selection
+        self.active_preset = None
         self._resume()
+
+    async def async_activate_preset(self, preset_id: str, hold: Hold | None = None) -> None:
+        """Switch to a preset; by default it stands until the next schedule block."""
+        preset = self.presets.get(preset_id)
+        if preset is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="unknown_preset",
+                translation_placeholders={"preset": preset_id},
+            )
+        self._start_override(hold)
+        self._apply_preset(preset)
+        self._resume()
+
+    def preset_by_name(self, name: str) -> Preset | None:
+        folded = name.casefold()
+        return next((preset for preset in self.presets.values() if preset.name.casefold() == folded), None)
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Pass a mode change through to the underlying thermostat."""
@@ -543,12 +655,80 @@ class RoomThermostatController:
         )
         self._resume()
 
+    async def async_set_fan_mode(self, fan_mode: str) -> None:
+        """Pass a fan mode (e.g. circulation) through to the underlying thermostat."""
+        await self.async_call_thermostat(
+            SERVICE_SET_FAN_MODE, {ATTR_ENTITY_ID: self.climate_entity_id, ATTR_FAN_MODE: fan_mode}
+        )
+
     async def async_call_thermostat(self, service: str, data: dict[str, Any]) -> None:
         """Every call to the underlying thermostat goes through here."""
         await self.hass.services.async_call(CLIMATE_DOMAIN, service, data, blocking=True, context=Context())
 
     async def async_resume(self) -> None:
+        """Back to the plan: ends any hold and returns to the schedule's preset (or what ran before the hold)."""
+        self._end_override("resumed")
+        self._return_to_plan()
         self._resume()
+
+    def async_save_presets(self, data: Any) -> None:
+        """Replace the preset list (built-ins stay; presets the schedule uses cannot be removed)."""
+        presets = parse_presets(data, self.room_names, self.settings.minimum_range, self.presets)
+        in_use = missing_presets(presets, self.schedule)
+        if in_use:
+            raise PlanError(f"the schedule still uses {', '.join(self.presets[p].name for p in in_use)}")
+        self.presets = presets
+        if self.active_preset not in presets:
+            self.active_preset = None
+        elif self.override is None or self.override.kind is HoldKind.NEXT_BLOCK:
+            self._apply_preset(presets[self.active_preset])
+        self._config_changed()
+
+    def async_save_schedule(self, data: Any) -> None:
+        """Replace the weekly schedule; the block now in effect applies unless a hold outranks it."""
+        self.schedule = parse_schedule(data, self.presets)
+        self.block_key = None
+        self._config_changed()
+
+    def config(self) -> dict[str, Any]:
+        """What a client needs to show and edit presets and the schedule."""
+        return {
+            "revision": self.config_revision,
+            "unit": self.unit,
+            "setpoint_step": self.settings.setpoint_step,
+            "minimum_range": self.settings.minimum_range,
+            "rooms": [{"id": room_id, "name": name} for room_id, name in self.room_names.items()],
+            "presets": [preset_to_dict(preset) for preset in self.presets.values()],
+            "schedule": schedule_to_list(self.schedule),
+            "active_preset": self.active_preset,
+            "hold": hold_to_dict(self.override),
+            "selection": selection_to_str(self.selection),
+        }
+
+    def _config_changed(self) -> None:
+        self.config_revision += 1
+        self._urgent = True
+        self._save()
+        self.evaluate()
+
+    def _start_override(self, hold: Hold | None) -> None:
+        """A change through Home Assistant outranks the plan. Without any schedule only a timed hold means anything."""
+        hold = hold or Hold(HoldKind.NEXT_BLOCK)
+        has_plan = self.uses_internal_schedule or self.schedule_entity_id is not None
+        if hold.kind is not HoldKind.UNTIL and not has_plan:
+            self.override = None
+            self.baseline = None
+            return
+        if self.override is None:
+            self.baseline = (self.targets, self.selection, self.active_preset)
+        self.override = hold
+
+    def _end_override(self, reason: str) -> None:
+        if self.override is not None:
+            self.hass.bus.async_fire(EVENT_OVERRIDE_ENDED, {"entry_id": self.entry.entry_id, "reason": reason})
+            if reason == "schedule":
+                self.baseline = None
+        self.override = None
 
     def _end_hold(self, reason: str) -> None:
         """Leave a manual hold (if in one), telling listeners why."""
@@ -580,6 +760,17 @@ class RoomThermostatController:
             cool = heat + gap
         return Setpoints(heat, cool)
 
+    def _ensure_built_in_presets(self) -> None:
+        """New installs (and upgrades) get Home (today's targets), Away and Sleep."""
+        (away_heat, away_cool), (sleep_heat, sleep_cool) = PRESET_DEFAULTS_BY_UNIT.get(
+            self.unit, PRESET_DEFAULTS_BY_UNIT[UnitOfTemperature.CELSIUS]
+        )
+        defaults = default_presets(
+            self.targets, self.default_selection, Setpoints(away_heat, away_cool), Setpoints(sleep_heat, sleep_cool)
+        )
+        for preset_id, preset in defaults.items():
+            self.presets.setdefault(preset_id, preset)
+
     def _restore(self, stored: Mapping[str, Any]) -> None:
         selection = stored.get("selection") or {}
         raw_strategy = selection.get("strategy")
@@ -600,6 +791,27 @@ class RoomThermostatController:
                 self.filters[room_id] = OffsetFilter(float(value), parsed)
         signature = stored.get("block_signature")
         self.block_signature = signature if isinstance(signature, list) else None
+        self.presets = presets_from_storage(stored.get("presets"), self.room_names)
+        self.schedule = schedule_from_storage(stored.get("schedule"), self.presets)
+        active = stored.get("active_preset")
+        self.active_preset = active if active in self.presets else None
+        self.override = hold_from_dict(stored.get("override"), dt_util.parse_datetime)
+        key = stored.get("block_key")
+        self.block_key = key if isinstance(key, list) else None
+        revision = stored.get("config_revision")
+        self.config_revision = revision if isinstance(revision, int) and not isinstance(revision, bool) else 0
+        self.baseline = self._restore_baseline(stored.get("baseline"))
+
+    def _restore_baseline(self, data: Any) -> tuple[Setpoints, Selection, str | None] | None:
+        if not isinstance(data, Mapping):
+            return None
+        targets = data.get("targets") or {}
+        heat, cool = _float(targets.get("heat")), _float(targets.get("cool"))
+        selection = parse_selection(data.get("selection"), self.room_names) or self.default_selection
+        preset = data.get("preset")
+        if heat is None or cool is None:
+            return None
+        return Setpoints(heat, cool), selection, preset if preset in self.presets else None
 
     def _save(self) -> None:
         self._store.async_delay_save(self._serialize, 5)
@@ -620,4 +832,17 @@ class RoomThermostatController:
                 if offset.value is not None and offset.updated_at is not None
             },
             "block_signature": self.block_signature,
+            "presets": [preset_to_dict(preset) for preset in self.presets.values()],
+            "schedule": schedule_to_list(self.schedule),
+            "active_preset": self.active_preset,
+            "override": hold_to_dict(self.override),
+            "baseline": None
+            if self.baseline is None
+            else {
+                "targets": {"heat": self.baseline[0].heat, "cool": self.baseline[0].cool},
+                "selection": selection_to_str(self.baseline[1]),
+                "preset": self.baseline[2],
+            },
+            "block_key": self.block_key,
+            "config_revision": self.config_revision,
         }

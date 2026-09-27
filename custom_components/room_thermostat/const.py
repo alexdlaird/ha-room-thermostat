@@ -35,6 +35,8 @@ BLOCK_COOL: Final = "cool"
 EVENT_MANUAL_CHANGE: Final = "room_thermostat_manual_change"
 #: Fired when a manual hold ends; `reason` is expired, resumed or schedule.
 EVENT_HOLD_ENDED: Final = "room_thermostat_hold_ended"
+#: Fired when a hold set through Home Assistant (dial, preset, app) ends; `reason` is expired, resumed or schedule.
+EVENT_OVERRIDE_ENDED: Final = "room_thermostat_override_ended"
 
 #: How often freshness is re-checked when nothing else changes.
 EVALUATE_INTERVAL_SECONDS: Final = 60
@@ -44,6 +46,12 @@ DEFAULT_MIN_WRITE_INTERVAL: Final = 15
 DEFAULT_SMOOTHING: Final = 15
 #: Minutes a change made outside Home Assistant is respected before control resumes (0 = indefinitely).
 DEFAULT_HOLD_DURATION: Final = 120
+
+#: Starting targets for the built-in Away and Sleep presets: ((away heat, away cool), (sleep heat, sleep cool)).
+PRESET_DEFAULTS_BY_UNIT: Final[dict[str, tuple[tuple[float, float], tuple[float, float]]]] = {
+    UnitOfTemperature.FAHRENHEIT: ((62.0, 80.0), (66.0, 76.0)),
+    UnitOfTemperature.CELSIUS: ((16.5, 26.5), (19.0, 24.5)),
+}
 
 #: Unit-dependent defaults: (max offset, deadband, setpoint step).
 DEFAULTS_BY_UNIT: Final[dict[str, tuple[float, float, float]]] = {
