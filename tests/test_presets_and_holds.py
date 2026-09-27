@@ -262,8 +262,8 @@ async def test_without_a_schedule_a_timed_hold_returns_to_what_ran_before(
     freezer.move_to(_local(0, 8))
     entry = await _setup(hass)
     controller = entry.runtime_data
-    await controller.async_activate_preset("home")
-    assert controller.override is None, "with no schedule an untimed change is simply the new setting"
+    await controller.async_set_targets(heat=67, cool=73)
+    assert controller.override is None, "with no schedule a new target is simply the new setting"
     before = _targets(entry)
 
     # WHEN
@@ -272,8 +272,45 @@ async def test_without_a_schedule_a_timed_hold_returns_to_what_ran_before(
 
     # THEN
     assert _targets(entry) == before
-    assert controller.active_preset == "home"
+    assert controller.active_preset is None
     assert controller.override is None
+
+
+async def test_without_a_schedule_a_preset_is_a_toggle_over_the_normal_setting(
+    hass: HomeAssistant, thermostat_calls: AsyncMock
+) -> None:
+    # GIVEN
+    entry = await _setup(hass)
+    controller = entry.runtime_data
+    await controller.async_set_targets(heat=67, cool=73)
+
+    # WHEN
+    await controller.async_activate_preset("away")
+
+    # THEN
+    assert controller.override == Hold(HoldKind.INDEFINITE)
+    assert _targets(entry) == (62.0, 80.0)
+    await controller.async_resume()
+    assert _targets(entry) == (67.0, 73.0)
+    assert controller.active_preset is None
+    assert controller.override is None
+
+
+async def test_moving_the_dial_during_a_preset_makes_a_new_normal(
+    hass: HomeAssistant, thermostat_calls: AsyncMock
+) -> None:
+    # GIVEN
+    entry = await _setup(hass)
+    controller = entry.runtime_data
+    await controller.async_activate_preset("away")
+
+    # WHEN
+    await controller.async_set_targets(heat=69, cool=75)
+
+    # THEN
+    assert controller.override is None
+    assert controller.baseline is None
+    assert controller.active_preset is None
 
 
 async def test_editing_the_active_preset_applies_it_and_new_presets_get_ids(

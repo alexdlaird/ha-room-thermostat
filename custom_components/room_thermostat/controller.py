@@ -652,7 +652,7 @@ class RoomThermostatController:
                 translation_key="unknown_preset",
                 translation_placeholders={"preset": preset_id},
             )
-        self._start_override(hold)
+        self._start_override(hold, preset=True)
         self._apply_preset(preset)
         self._resume()
 
@@ -692,7 +692,7 @@ class RoomThermostatController:
         self.presets = presets
         if self.active_preset not in presets:
             self.active_preset = None
-        elif self.override is None or self.override.kind is HoldKind.NEXT_BLOCK:
+        else:
             self._apply_preset(presets[self.active_preset])
         self._config_changed()
 
@@ -726,14 +726,20 @@ class RoomThermostatController:
         self._save()
         self.evaluate()
 
-    def _start_override(self, hold: Hold | None) -> None:
-        """A change through Home Assistant outranks the plan. Without any schedule only a timed hold means anything."""
+    def _start_override(self, hold: Hold | None, *, preset: bool = False) -> None:
+        """A change through Home Assistant outranks the plan.
+
+        Without any schedule, a new target or room is simply the new setting, a timed hold returns to the previous
+        one, and a preset is held until resumed, so presets work as toggles over the normal setting.
+        """
         hold = hold or Hold(HoldKind.NEXT_BLOCK)
         has_plan = self.uses_internal_schedule or self.schedule_entity_id is not None
-        if hold.kind is not HoldKind.UNTIL and not has_plan:
-            self.override = None
-            self.baseline = None
-            return
+        if not has_plan and hold.kind is not HoldKind.UNTIL:
+            if not preset:
+                self.override = None
+                self.baseline = None
+                return
+            hold = Hold(HoldKind.INDEFINITE)
         if self.override is None:
             self.baseline = (self.targets, self.selection, self.active_preset)
         self.override = hold

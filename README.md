@@ -82,7 +82,9 @@ be edited by admins).
 
 A change made through Home Assistant (targets, the active room, a preset) is a **hold** that
 outranks the schedule: by default until the next block; or for a number of minutes (it then returns
-to the schedule, or to what ran before if there is none); or until someone resumes. **Resume** ends
+to the schedule, or to what ran before if there is none); or until someone resumes. Without a
+schedule, a new target or room is simply the new setting, while a preset is held until resumed, so
+presets work as toggles over the normal setting (Resume returns to it). **Resume** ends
 any hold and returns to the schedule. A `room_thermostat_override_ended` event fires when such a hold
 ends (`reason`: `expired`, `resumed` or `schedule`).
 
