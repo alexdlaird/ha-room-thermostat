@@ -1,0 +1,31 @@
+{
+  "entity": {
+    "select": {
+      "active_room": {
+        "default": "mdi:home-thermometer"
+      }
+    },
+    "sensor": {
+      "room_offset": {
+        "default": "mdi:thermometer-minus"
+      },
+      "room_error": {
+        "default": "mdi:target"
+      },
+      "commanded_heat": {
+        "default": "mdi:fire"
+      },
+      "commanded_cool": {
+        "default": "mdi:snowflake"
+      },
+      "control_state": {
+        "default": "mdi:state-machine"
+      }
+    },
+    "button": {
+      "resume": {
+        "default": "mdi:play"
+      }
+    }
+  }
+}

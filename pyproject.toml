@@ -1,0 +1,72 @@
+[project]
+name = "ha-room-thermostat"
+version = "0.1.0"
+description = "Home Assistant integration: control any thermostat to the temperature of the room that matters"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.14.2"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "pytest-homeassistant-custom-component==0.13.357",
+    "ruff==0.16.0",
+    "mypy==2.3.0",
+    "pre-commit>=4.0",
+    "pyyaml>=6.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+timeout = 60
+
+[tool.coverage.run]
+source = ["custom_components/room_thermostat"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 95
+show_missing = true
+skip_covered = false
+
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+extend-exclude = [".venv", ".hassfest"]
+
+[tool.ruff.lint]
+select = [
+    "A001", "ASYNC", "B", "C4", "E", "F", "FLY", "G", "I", "INP", "ISC", "LOG", "N", "PERF", "PGH", "PIE", "PL",
+    "PT", "PTH", "RET", "RSE", "RUF", "SIM", "SLF", "T20", "TC", "TID", "TRY", "UP", "W",
+]
+ignore = [
+    "E501", "PLR0911", "PLR0912", "PLR0913", "PLR0915", "PLR2004", "TRY003", "TRY400",
+    "TC001", "TC002", "TC003", "SIM102", "SIM108", "RUF012", "ISC001",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["SLF001", "PLR2004", "ASYNC", "INP001", "T20"]
+"scripts/**" = ["T20", "INP001"]
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
+known-first-party = ["custom_components.room_thermostat"]
+combine-as-imports = true
+
+[tool.mypy]
+python_version = "3.14"
+platform = "linux"
+files = ["custom_components/room_thermostat"]
+mypy_path = "."
+explicit_package_bases = true
+strict = true
+warn_unreachable = true
+local_partial_types = true
+enable_error_code = ["deprecated", "ignore-without-code", "redundant-self", "truthy-iterable"]
+disable_error_code = ["import-untyped", "import-not-found"]

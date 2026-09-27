@@ -1,0 +1,25 @@
+# secrets — never commit
+.env
+.env.*
+*.env
+
+# python / tooling
+.venv/
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.hassfest/
+*.egg-info/
+
+# editors / os
+.DS_Store
+.idea/
+.vscode/
+
+# local privacy-scan term list (never commit)
+.private-terms

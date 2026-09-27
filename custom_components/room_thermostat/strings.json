@@ -1,0 +1,123 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Room thermostat",
+        "description": "Control a thermostat to the temperature of the room that matters. Pick the thermostat to steer and the temperature sensors of the rooms to steer it by.",
+        "data": {
+          "name": "Name",
+          "climate_entity": "Thermostat",
+          "room_sensors": "Room temperature sensors",
+          "reference_sensor": "Reference room (optional)"
+        },
+        "data_description": {
+          "climate_entity": "The real thermostat. Its setpoints are shifted so the chosen room reaches your target.",
+          "room_sensors": "One sensor per room. A room's id is the sensor's entity id without the domain and a trailing \"_temperature\" (sensor.bedroom_temperature is bedroom).",
+          "reference_sensor": "A sensor mounted next to the thermostat, used when the active room's sensor goes quiet and to remember the thermostat's own error."
+        }
+      }
+    },
+    "error": {
+      "no_rooms": "Pick at least one room temperature sensor.",
+      "reference_not_a_room": "The reference sensor must be one of the room sensors.",
+      "cannot_wrap_itself": "Pick the real thermostat, not a room thermostat."
+    },
+    "abort": {
+      "already_configured": "This thermostat already has a room thermostat."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Room thermostat options",
+        "data": {
+          "room_sensors": "Room temperature sensors",
+          "reference_sensor": "Reference room",
+          "default_room": "Default room",
+          "schedule_entity": "Schedule",
+          "manual_change_policy": "When the thermostat is changed outside Home Assistant",
+          "stale_after_minutes": "Sensor stale after (minutes)",
+          "max_offset": "Maximum offset",
+          "deadband": "Deadband",
+          "min_write_interval_minutes": "Minimum time between writes (minutes)",
+          "smoothing_minutes": "Offset smoothing (minutes)",
+          "setpoint_step": "Setpoint step",
+          "minimum_range": "Minimum heat/cool range"
+        },
+        "data_description": {
+          "default_room": "Room id, average or extreme. Used outside schedule blocks. Defaults to the reference room, else the average.",
+          "schedule_entity": "A schedule helper. Each block's additional data may set room (id, name, average or extreme), heat and cool (room targets). A new block replaces manual choices and ends a hold.",
+          "manual_change_policy": "Hold keeps the change until the next schedule block (or Resume). Adopt keeps the thermostat where it was put and moves the room target by the current offset.",
+          "stale_after_minutes": "A room whose sensor has not reported for this long is skipped.",
+          "max_offset": "Largest difference allowed between the thermostat's setpoint and the room target, in your temperature unit.",
+          "deadband": "The thermostat is only rewritten when its setpoint is at least this far from what is wanted.",
+          "min_write_interval_minutes": "Routine corrections wait at least this long. Target, mode, room and schedule changes are written right away.",
+          "smoothing_minutes": "Time constant of the moving average applied to each room's offset.",
+          "setpoint_step": "Commanded setpoints are rounded to this step.",
+          "minimum_range": "Smallest heat_cool range your thermostat accepts (its heat/cool deadband). 0 if it has none."
+        }
+      }
+    }
+  },
+  "selector": {
+    "manual_change_policy": {
+      "options": {
+        "hold": "Hold until the next schedule block",
+        "adopt": "Adopt as the new room target"
+      }
+    }
+  },
+  "entity": {
+    "select": {
+      "active_room": {
+        "name": "Active room"
+      }
+    },
+    "sensor": {
+      "room_temperature": {
+        "name": "Room temperature"
+      },
+      "room_offset": {
+        "name": "Room offset"
+      },
+      "room_error": {
+        "name": "Room error"
+      },
+      "commanded_heat": {
+        "name": "Commanded heat setpoint"
+      },
+      "commanded_cool": {
+        "name": "Commanded cool setpoint"
+      },
+      "control_state": {
+        "name": "Control state",
+        "state": {
+          "controlling": "Controlling",
+          "fallback_reference": "Reference room (active room stale)",
+          "fallback_thermostat": "Thermostat (no fresh room)",
+          "manual_hold": "Manual hold",
+          "idle": "Idle",
+          "underlying_unavailable": "Thermostat unavailable"
+        }
+      }
+    },
+    "binary_sensor": {
+      "control_problem": {
+        "name": "Control problem"
+      }
+    },
+    "button": {
+      "resume": {
+        "name": "Resume"
+      }
+    }
+  },
+  "exceptions": {
+    "range_too_narrow": {
+      "message": "Heat and cool targets must be at least {minimum} apart."
+    },
+    "single_target_not_applicable": {
+      "message": "This mode has no single target temperature."
+    }
+  }
+}
