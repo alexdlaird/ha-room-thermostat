@@ -13,7 +13,9 @@ fi
 fail=0
 while IFS= read -r term; do
   case "$term" in ''|\#*) continue ;; esac
-  if git ls-files -z --cached --others --exclude-standard | xargs -0 grep -IliF -- "$term" 2>/dev/null | grep -q .; then
+  # Capture instead of piping into `grep -q`: under pipefail its early exit SIGPIPEs xargs and hides a match.
+  matches="$(git ls-files -z --cached --others --exclude-standard | xargs -0 grep -IliF -- "$term" 2>/dev/null || true)"
+  if [ -n "$matches" ]; then
     echo "PRIVACY-SCAN FAIL: a private term appears in a tracked file"
     fail=1
   fi
