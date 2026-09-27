@@ -375,9 +375,9 @@ async def test_config_describes_rooms_presets_and_the_week(
     result = response["result"]
     assert result["unit"] == "°F"
     assert result["rooms"] == [
-        {"id": "living", "name": "Living"},
-        {"id": "office", "name": "Office"},
-        {"id": "bed", "name": "Bed"},
+        {"id": "living", "name": "Living", "followable": True},
+        {"id": "office", "name": "Office", "followable": True},
+        {"id": "bed", "name": "Bed", "followable": True},
     ]
     assert [preset["name"] for preset in result["presets"]] == ["Home", "Away", "Sleep"]
     assert result["schedule"] == [[]] * 7

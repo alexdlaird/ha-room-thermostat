@@ -25,6 +25,9 @@ CONF_SETPOINT_STEP: Final = "setpoint_step"
 CONF_MINIMUM_RANGE: Final = "minimum_range"
 CONF_MANUAL_CHANGE_POLICY: Final = "manual_change_policy"
 CONF_HOLD_DURATION: Final = "hold_duration_minutes"
+#: Room sensors in the house that this thermostat does not heat or cool (e.g. a room with its own mini split):
+#: shown and recorded, never followed.
+CONF_UNSERVED_ROOMS: Final = "unserved_rooms"
 
 #: Schedule block data keys.
 BLOCK_ROOM: Final = "room"

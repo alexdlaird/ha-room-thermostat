@@ -43,7 +43,8 @@
           "smoothing_minutes": "Offset smoothing (minutes)",
           "setpoint_step": "Setpoint step",
           "minimum_range": "Minimum heat/cool range",
-          "hold_duration_minutes": "Hold duration (minutes)"
+          "hold_duration_minutes": "Hold duration (minutes)",
+          "unserved_rooms": "Rooms this thermostat doesn't heat or cool"
         },
         "data_description": {
           "default_room": "Room id, average or extreme. Used outside schedule blocks. Defaults to the reference room, else the average.",
@@ -56,9 +57,17 @@
           "smoothing_minutes": "Time constant of the moving average applied to each room's offset.",
           "setpoint_step": "Commanded setpoints are rounded to this step.",
           "minimum_range": "Smallest heat_cool range your thermostat accepts (its heat/cool deadband). 0 if it has none.",
-          "hold_duration_minutes": "How long a change made outside Home Assistant is respected before room control takes over again. A newer change restarts the clock. 0 holds until the next schedule block or Resume."
+          "hold_duration_minutes": "How long a change made outside Home Assistant is respected before room control takes over again. A newer change restarts the clock. 0 holds until the next schedule block or Resume.",
+          "unserved_rooms": "Room sensors from the list above in parts of the house this system doesn't reach (e.g. a room with its own mini split). Their temperatures are still shown and recorded, but they are never followed and don't count toward average or most off target."
         }
       }
+    },
+    "error": {
+      "unserved_not_a_room": "Rooms the thermostat doesn't serve must also be in the room sensors.",
+      "no_served_rooms": "At least one room must be one this thermostat heats or cools.",
+      "reference_unserved": "The reference room must be one this thermostat heats or cools.",
+      "reference_not_a_room": "The reference sensor must be one of the room sensors.",
+      "no_rooms": "Pick at least one room temperature sensor."
     }
   },
   "selector": {

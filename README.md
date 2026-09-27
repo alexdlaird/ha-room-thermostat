@@ -55,6 +55,7 @@ Everything else is under **Configure** (saving reloads the integration):
 
 | Option | Default | |
 | --- | --- | --- |
+| Rooms this thermostat doesn't heat or cool | none | Room sensors in parts of the house this system doesn't reach (e.g. a room with its own mini split). They are still reported (`room_thermostat/config` lists them with `followable: false`) but never followed: not selectable, not in presets or holds, not the reference or default room, and left out of `average` and `extreme`. |
 | Default room | reference room, else `average` | Room id, `average` or `extreme`; used outside schedule blocks. |
 | Schedule | none | A [Schedule helper](https://www.home-assistant.io/integrations/schedule/) (see below). |
 | When the thermostat is changed outside Home Assistant | Hold | **Hold** respects the change for the hold duration, then room control resumes (a new schedule block or **Resume** ends it sooner). **Adopt** keeps the thermostat where it was put and moves the room target by the current offset. Either way a `room_thermostat_manual_change` event fires. |

@@ -119,7 +119,7 @@ async def ws_set(hass: HomeAssistant, connection: ActiveConnection, msg: dict[st
 
 
 def _selection(controller: RoomThermostatController, room: str) -> Selection:
-    selection = parse_selection(room, controller.room_names)
+    selection = parse_selection(room, controller.followable_rooms)
     if selection is None:
         raise PlanError(f"unknown room {room!r}")
     return selection

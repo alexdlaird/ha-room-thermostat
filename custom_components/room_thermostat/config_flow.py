@@ -39,6 +39,7 @@ from .const import (
     CONF_SETPOINT_STEP,
     CONF_SMOOTHING,
     CONF_STALE_AFTER,
+    CONF_UNSERVED_ROOMS,
     DEFAULT_HOLD_DURATION,
     DEFAULT_MIN_WRITE_INTERVAL,
     DEFAULT_SMOOTHING,
@@ -75,14 +76,21 @@ def default_options(hass: HomeAssistant) -> dict[str, Any]:
 
 
 def validate_rooms(user_input: dict[str, Any]) -> dict[str, str]:
-    """At least one room, and the reference room must be one of them."""
+    """At least one room the thermostat serves, and the reference room must be one of those."""
     errors: dict[str, str] = {}
     rooms = user_input.get(CONF_ROOM_SENSORS) or []
+    unserved = user_input.get(CONF_UNSERVED_ROOMS) or []
     if not rooms:
         errors[CONF_ROOM_SENSORS] = "no_rooms"
+    elif any(sensor not in rooms for sensor in unserved):
+        errors[CONF_UNSERVED_ROOMS] = "unserved_not_a_room"
+    elif not set(rooms) - set(unserved):
+        errors[CONF_UNSERVED_ROOMS] = "no_served_rooms"
     reference = user_input.get(CONF_REFERENCE_SENSOR)
     if reference and rooms and reference not in rooms:
         errors[CONF_REFERENCE_SENSOR] = "reference_not_a_room"
+    elif reference and reference in unserved:
+        errors[CONF_REFERENCE_SENSOR] = "reference_unserved"
     return errors
 
 
@@ -137,8 +145,13 @@ class RoomThermostatOptionsFlow(OptionsFlowWithReload):
         if user_input is not None:
             errors = validate_rooms(user_input)
             default_room = user_input.get(CONF_DEFAULT_ROOM)
+            unserved = set(user_input.get(CONF_UNSERVED_ROOMS) or [])
             valid_defaults = {
-                *build_rooms(user_input.get(CONF_ROOM_SENSORS) or []),
+                *(
+                    room_id
+                    for room_id, sensor in build_rooms(user_input.get(CONF_ROOM_SENSORS) or []).items()
+                    if sensor not in unserved
+                ),
                 *(s.value for s in (Strategy.AVERAGE, Strategy.EXTREME)),
             }
             if default_room and default_room not in valid_defaults:
@@ -147,8 +160,13 @@ class RoomThermostatOptionsFlow(OptionsFlowWithReload):
                 return self.async_create_entry(data=user_input)
             current = user_input
 
+        unserved_now = set(current.get(CONF_UNSERVED_ROOMS) or [])
         rooms = build_rooms(current.get(CONF_ROOM_SENSORS) or [])
-        room_choices = [SelectOptionDict(value=room_id, label=room_id) for room_id in rooms]
+        room_choices = [
+            SelectOptionDict(value=room_id, label=room_id)
+            for room_id, sensor in rooms.items()
+            if sensor not in unserved_now
+        ]
         room_choices += [SelectOptionDict(value=s.value, label=s.value) for s in (Strategy.AVERAGE, Strategy.EXTREME)]
 
         def number(minimum: float, maximum: float, step: float) -> NumberSelector:
@@ -159,6 +177,7 @@ class RoomThermostatOptionsFlow(OptionsFlowWithReload):
         schema = vol.Schema(
             {
                 vol.Required(CONF_ROOM_SENSORS): ROOM_SENSOR_SELECTOR,
+                vol.Optional(CONF_UNSERVED_ROOMS): ROOM_SENSOR_SELECTOR,
                 vol.Optional(CONF_REFERENCE_SENSOR): REFERENCE_SELECTOR,
                 vol.Optional(CONF_DEFAULT_ROOM): SelectSelector(
                     SelectSelectorConfig(options=room_choices, mode=SelectSelectorMode.DROPDOWN, custom_value=True)

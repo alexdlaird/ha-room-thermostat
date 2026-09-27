@@ -65,6 +65,7 @@ from .const import (
     CONF_SETPOINT_STEP,
     CONF_SMOOTHING,
     CONF_STALE_AFTER,
+    CONF_UNSERVED_ROOMS,
     DEFAULT_HOLD_DURATION,
     DEFAULT_MIN_WRITE_INTERVAL,
     DEFAULT_SMOOTHING,
@@ -233,8 +234,13 @@ class RoomThermostatController:
         max_offset, deadband, step = unit_defaults(self.unit)
         self.climate_entity_id: str = entry.data[CONF_CLIMATE_ENTITY]
         self.rooms = build_rooms(list(options.get(CONF_ROOM_SENSORS, [])))
+        unserved = set(options.get(CONF_UNSERVED_ROOMS) or [])
+        #: Rooms this thermostat does not heat or cool: reported, never followed.
+        self.unserved = {room_id for room_id, entity_id in self.rooms.items() if entity_id in unserved}
         reference = options.get(CONF_REFERENCE_SENSOR)
-        self.reference_id = next((rid for rid, eid in self.rooms.items() if eid == reference), None)
+        self.reference_id = next(
+            (rid for rid, eid in self.rooms.items() if eid == reference and rid not in self.unserved), None
+        )
         self.schedule_entity_id: str | None = options.get(CONF_SCHEDULE_ENTITY) or None
         self.settings = Settings(
             stale_after=timedelta(minutes=float(options.get(CONF_STALE_AFTER, DEFAULT_STALE_AFTER))),
@@ -251,7 +257,7 @@ class RoomThermostatController:
         #: None holds until the next schedule block or Resume.
         hold_minutes = float(options.get(CONF_HOLD_DURATION, DEFAULT_HOLD_DURATION))
         self.hold_duration: timedelta | None = timedelta(minutes=hold_minutes) if hold_minutes > 0 else None
-        self.default_selection = parse_selection(options.get(CONF_DEFAULT_ROOM), self.rooms) or (
+        self.default_selection = parse_selection(options.get(CONF_DEFAULT_ROOM), self.followable_rooms) or (
             Selection.room(self.reference_id) if self.reference_id else Selection(Strategy.AVERAGE)
         )
 
@@ -325,6 +331,11 @@ class RoomThermostatController:
             names[room_id] = name or room_id.replace("_", " ").title()
         return names
 
+    @property
+    def followable_rooms(self) -> dict[str, str]:
+        """Room id -> display name for the rooms this thermostat can steer by."""
+        return {room_id: name for room_id, name in self.room_names.items() if room_id not in self.unserved}
+
     # ------------------------------------------------------------------- inputs
 
     @callback
@@ -396,7 +407,7 @@ class RoomThermostatController:
                 for key, value in ((BLOCK_ROOM, room), (BLOCK_HEAT, heat), (BLOCK_COOL, cool))
                 if value is not None
             }
-            block = parse_block(data, self.room_names)
+            block = parse_block(data, self.followable_rooms)
             errors = list(block.errors)
             if block.selection is not None:
                 self.selection = block.selection
@@ -484,6 +495,7 @@ class RoomThermostatController:
 
         mode = live_mode(underlying)
         fresh = fresh_readings(self._readings(), now, self.settings.stale_after)
+        fresh = {room_id: value for room_id, value in fresh.items() if room_id not in self.unserved}
         for room_id, temperature in fresh.items():
             self.filters.setdefault(room_id, OffsetFilter()).update(
                 thermostat_temperature - temperature, now, self.settings.smoothing
@@ -673,7 +685,7 @@ class RoomThermostatController:
 
     def async_save_presets(self, data: Any) -> None:
         """Replace the preset list (built-ins stay; presets the schedule uses cannot be removed)."""
-        presets = parse_presets(data, self.room_names, self.settings.minimum_range, self.presets)
+        presets = parse_presets(data, self.followable_rooms, self.settings.minimum_range, self.presets)
         in_use = missing_presets(presets, self.schedule)
         if in_use:
             raise PlanError(f"the schedule still uses {', '.join(self.presets[p].name for p in in_use)}")
@@ -697,7 +709,10 @@ class RoomThermostatController:
             "unit": self.unit,
             "setpoint_step": self.settings.setpoint_step,
             "minimum_range": self.settings.minimum_range,
-            "rooms": [{"id": room_id, "name": name} for room_id, name in self.room_names.items()],
+            "rooms": [
+                {"id": room_id, "name": name, "followable": room_id not in self.unserved}
+                for room_id, name in self.room_names.items()
+            ],
             "presets": [preset_to_dict(preset) for preset in self.presets.values()],
             "schedule": schedule_to_list(self.schedule),
             "active_preset": self.active_preset,
@@ -776,7 +791,7 @@ class RoomThermostatController:
         raw_strategy = selection.get("strategy")
         strategy = Strategy(raw_strategy) if raw_strategy in {s.value for s in Strategy} else None
         room_id = selection.get("room_id")
-        if strategy is Strategy.ROOM and room_id in self.rooms:
+        if strategy is Strategy.ROOM and room_id in self.rooms and room_id not in self.unserved:
             self.selection = Selection.room(room_id)
         elif strategy in (Strategy.AVERAGE, Strategy.EXTREME):
             self.selection = Selection(strategy)
@@ -791,7 +806,7 @@ class RoomThermostatController:
                 self.filters[room_id] = OffsetFilter(float(value), parsed)
         signature = stored.get("block_signature")
         self.block_signature = signature if isinstance(signature, list) else None
-        self.presets = presets_from_storage(stored.get("presets"), self.room_names)
+        self.presets = presets_from_storage(stored.get("presets"), self.followable_rooms)
         self.schedule = schedule_from_storage(stored.get("schedule"), self.presets)
         active = stored.get("active_preset")
         self.active_preset = active if active in self.presets else None
@@ -807,7 +822,7 @@ class RoomThermostatController:
             return None
         targets = data.get("targets") or {}
         heat, cool = _float(targets.get("heat")), _float(targets.get("cool"))
-        selection = parse_selection(data.get("selection"), self.room_names) or self.default_selection
+        selection = parse_selection(data.get("selection"), self.followable_rooms) or self.default_selection
         preset = data.get("preset")
         if heat is None or cool is None:
             return None

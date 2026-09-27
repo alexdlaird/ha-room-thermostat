@@ -35,13 +35,13 @@ class ActiveRoomSelect(RoomThermostatEntity, SelectEntity):
 
     @property
     def options(self) -> list[str]:
-        return [*self.controller.room_names.values(), OPTION_AVERAGE, OPTION_EXTREME]
+        return [*self.controller.followable_rooms.values(), OPTION_AVERAGE, OPTION_EXTREME]
 
     @property
     def current_option(self) -> str | None:
         selection = self.controller.selection
         if selection.strategy is Strategy.ROOM:
-            return self.controller.room_names.get(selection.room_id or "")
+            return self.controller.followable_rooms.get(selection.room_id or "")
         return STRATEGY_OPTIONS[selection.strategy]
 
     async def async_select_option(self, option: str) -> None:
@@ -49,5 +49,5 @@ class ActiveRoomSelect(RoomThermostatEntity, SelectEntity):
             if option == label:
                 await self.controller.async_set_selection(Selection(strategy))
                 return
-        room_id = next(room_id for room_id, name in self.controller.room_names.items() if name == option)
+        room_id = next(room_id for room_id, name in self.controller.followable_rooms.items() if name == option)
         await self.controller.async_set_selection(Selection.room(room_id))

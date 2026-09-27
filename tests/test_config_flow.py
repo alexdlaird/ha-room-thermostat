@@ -25,6 +25,7 @@ from custom_components.room_thermostat.const import (
     CONF_SETPOINT_STEP,
     CONF_SMOOTHING,
     CONF_STALE_AFTER,
+    CONF_UNSERVED_ROOMS,
     DOMAIN,
 )
 
@@ -167,6 +168,10 @@ async def test_options_are_saved_and_reload_the_entry(hass: HomeAssistant, therm
     [
         ({CONF_DEFAULT_ROOM: "garage"}, CONF_DEFAULT_ROOM, "unknown_default_room"),
         ({CONF_ROOM_SENSORS: [OFFICE, BED]}, CONF_REFERENCE_SENSOR, "reference_not_a_room"),
+        ({CONF_UNSERVED_ROOMS: ["sensor.attic_temperature"]}, CONF_UNSERVED_ROOMS, "unserved_not_a_room"),
+        ({CONF_UNSERVED_ROOMS: [LIVING, OFFICE, BED]}, CONF_UNSERVED_ROOMS, "no_served_rooms"),
+        ({CONF_UNSERVED_ROOMS: [LIVING]}, CONF_REFERENCE_SENSOR, "reference_unserved"),
+        ({CONF_UNSERVED_ROOMS: [OFFICE], CONF_DEFAULT_ROOM: "office"}, CONF_DEFAULT_ROOM, "unknown_default_room"),
     ],
 )
 async def test_options_are_validated(
@@ -183,7 +188,7 @@ async def test_options_are_validated(
 
     # THEN
     assert result["type"] is FlowResultType.FORM
-    assert result["errors"] == {field: error}
+    assert result["errors"][field] == error
 
 
 @pytest.mark.parametrize("default_room", ["average", "extreme", "bed"])
