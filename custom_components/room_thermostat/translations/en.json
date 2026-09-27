@@ -42,19 +42,21 @@
           "min_write_interval_minutes": "Minimum time between writes (minutes)",
           "smoothing_minutes": "Offset smoothing (minutes)",
           "setpoint_step": "Setpoint step",
-          "minimum_range": "Minimum heat/cool range"
+          "minimum_range": "Minimum heat/cool range",
+          "hold_duration_minutes": "Hold duration (minutes)"
         },
         "data_description": {
           "default_room": "Room id, average or extreme. Used outside schedule blocks. Defaults to the reference room, else the average.",
           "schedule_entity": "A schedule helper. Each block's additional data may set room (id, name, average or extreme), heat and cool (room targets). A new block replaces manual choices and ends a hold.",
-          "manual_change_policy": "Hold keeps the change until the next schedule block (or Resume). Adopt keeps the thermostat where it was put and moves the room target by the current offset.",
+          "manual_change_policy": "Hold keeps the change for the hold duration (or until the next schedule block, or Resume). Adopt keeps the thermostat where it was put and moves the room target by the current offset.",
           "stale_after_minutes": "A room whose sensor has not reported for this long is skipped.",
           "max_offset": "Largest difference allowed between the thermostat's setpoint and the room target, in your temperature unit.",
           "deadband": "The thermostat is only rewritten when its setpoint is at least this far from what is wanted.",
           "min_write_interval_minutes": "Routine corrections wait at least this long. Target, mode, room and schedule changes are written right away.",
           "smoothing_minutes": "Time constant of the moving average applied to each room's offset.",
           "setpoint_step": "Commanded setpoints are rounded to this step.",
-          "minimum_range": "Smallest heat_cool range your thermostat accepts (its heat/cool deadband). 0 if it has none."
+          "minimum_range": "Smallest heat_cool range your thermostat accepts (its heat/cool deadband). 0 if it has none.",
+          "hold_duration_minutes": "How long a change made outside Home Assistant is respected before room control takes over again. A newer change restarts the clock. 0 holds until the next schedule block or Resume."
         }
       }
     }
@@ -62,7 +64,7 @@
   "selector": {
     "manual_change_policy": {
       "options": {
-        "hold": "Hold until the next schedule block",
+        "hold": "Hold for a while, then resume",
         "adopt": "Adopt as the new room target"
       }
     }
@@ -99,6 +101,9 @@
           "idle": "Idle",
           "underlying_unavailable": "Thermostat unavailable"
         }
+      },
+      "hold_ends": {
+        "name": "Hold ends"
       }
     },
     "binary_sensor": {

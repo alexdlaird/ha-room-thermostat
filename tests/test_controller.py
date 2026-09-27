@@ -14,18 +14,21 @@ from homeassistant.components.climate.const import (
     SERVICE_SET_TEMPERATURE,
 )
 from homeassistant.components.select import ATTR_OPTION, DOMAIN as SELECT_DOMAIN, SERVICE_SELECT_OPTION
-from homeassistant.const import ATTR_ENTITY_ID, ATTR_TEMPERATURE, STATE_OFF, STATE_ON, STATE_UNAVAILABLE
+from homeassistant.const import ATTR_ENTITY_ID, ATTR_TEMPERATURE, STATE_OFF, STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.util import dt as dt_util
 from homeassistant.util.unit_system import METRIC_SYSTEM
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed, async_mock_service
 
 from custom_components.room_thermostat.const import (
     CONF_DEFAULT_ROOM,
+    CONF_HOLD_DURATION,
     CONF_MANUAL_CHANGE_POLICY,
     CONF_MINIMUM_RANGE,
     CONF_SCHEDULE_ENTITY,
+    EVENT_HOLD_ENDED,
     EVENT_MANUAL_CHANGE,
 )
 from custom_components.room_thermostat.controller import build_rooms
@@ -47,6 +50,7 @@ SCHEDULE = "schedule.rooms"
 STATE = "sensor.house_room_control_state"
 PROBLEM = "binary_sensor.house_room_control_problem"
 ACTIVE_ROOM = "select.house_room_active_room"
+HOLD_ENDS = "sensor.house_room_hold_ends"
 
 
 def _writes(calls: AsyncMock) -> list[dict[str, Any]]:
@@ -738,3 +742,143 @@ async def test_the_thermostat_is_called_through_its_climate_services(hass: HomeA
 
     # THEN
     assert [call.data for call in calls] == [{ATTR_ENTITY_ID: THERMOSTAT, "fan_mode": "on"}]
+
+
+def _record(hass: HomeAssistant, event_type: str) -> list[Event]:
+    events: list[Event] = []
+
+    @callback
+    def _append(event: Event) -> None:
+        events.append(event)
+
+    hass.bus.async_listen(event_type, _append)
+    return events
+
+
+async def _hold(hass: HomeAssistant, low: float = 60.0) -> None:
+    set_thermostat(hass, low=low, high=69.0)
+    await hass.async_block_till_done()
+
+
+async def test_a_hold_shows_when_it_ends(
+    hass: HomeAssistant, thermostat_calls: AsyncMock, freezer: FrozenDateTimeFactory
+) -> None:
+    # GIVEN
+    changes = _record(hass, EVENT_MANUAL_CHANGE)
+    set_thermostat(hass)
+    set_rooms(hass)
+    await _setup(hass)
+    started = dt_util.utcnow()
+
+    # WHEN
+    await _hold(hass)
+
+    # THEN
+    expected = started + timedelta(minutes=120)
+    assert dt_util.parse_datetime(hass.states.get(HOLD_ENDS).state) == expected.replace(microsecond=0)
+    assert changes[0].data["hold_until"] == expected.isoformat()
+    assert hass.states.get(ROOM_CLIMATE).attributes["hold_until"] == expected.isoformat()
+
+
+async def test_a_hold_expires_and_control_resumes_right_away(
+    hass: HomeAssistant, thermostat_calls: AsyncMock, freezer: FrozenDateTimeFactory
+) -> None:
+    # GIVEN
+    ended = _record(hass, EVENT_HOLD_ENDED)
+    set_thermostat(hass)
+    set_rooms(hass)
+    await _setup(hass)
+    await _hold(hass)
+
+    # WHEN
+    for _ in range(119):
+        await _tick(hass, freezer, 1)
+        set_rooms(hass)
+    held_writes = len(_writes(thermostat_calls))
+    await _tick(hass, freezer, 1)
+
+    # THEN
+    assert held_writes == 1
+    assert len(_writes(thermostat_calls)) == 2
+    assert [event.data["reason"] for event in ended] == ["expired"]
+    assert hass.states.get(STATE).state == "controlling"
+    assert hass.states.get(HOLD_ENDS).state == STATE_UNKNOWN
+
+
+async def test_a_newer_outside_change_restarts_the_hold(
+    hass: HomeAssistant, thermostat_calls: AsyncMock, freezer: FrozenDateTimeFactory
+) -> None:
+    # GIVEN
+    set_thermostat(hass)
+    set_rooms(hass)
+    await _setup(hass)
+    await _hold(hass)
+    await _tick(hass, freezer, 90)
+    set_rooms(hass)
+
+    # WHEN
+    await _hold(hass, low=61.0)
+    await _tick(hass, freezer, 60)
+    set_rooms(hass)
+    await _tick(hass, freezer, 1)
+
+    # THEN
+    assert hass.states.get(STATE).state == "manual_hold"
+
+
+async def test_a_zero_hold_duration_holds_until_resumed(
+    hass: HomeAssistant, thermostat_calls: AsyncMock, freezer: FrozenDateTimeFactory
+) -> None:
+    # GIVEN
+    set_thermostat(hass)
+    set_rooms(hass)
+    await _setup(hass, **{CONF_HOLD_DURATION: 0})
+    await _hold(hass)
+
+    # WHEN
+    await _tick(hass, freezer, 24 * 60)
+    set_rooms(hass)
+    await _tick(hass, freezer, 1)
+
+    # THEN
+    assert hass.states.get(STATE).state == "manual_hold"
+    assert hass.states.get(HOLD_ENDS).state == STATE_UNKNOWN
+
+
+async def test_resume_and_schedule_report_why_the_hold_ended(hass: HomeAssistant, thermostat_calls: AsyncMock) -> None:
+    # GIVEN
+    ended = _record(hass, EVENT_HOLD_ENDED)
+    _set_schedule(hass, STATE_OFF)
+    set_thermostat(hass)
+    set_rooms(hass)
+    await _setup(hass, **{CONF_SCHEDULE_ENTITY: SCHEDULE})
+
+    # WHEN
+    await _hold(hass)
+    await hass.services.async_call("button", "press", {ATTR_ENTITY_ID: "button.house_room_resume"}, blocking=True)
+    await _hold(hass, low=61.0)
+    _set_schedule(hass, STATE_ON, heat=64, cool=72)
+    await hass.async_block_till_done()
+    await hass.services.async_call("button", "press", {ATTR_ENTITY_ID: "button.house_room_resume"}, blocking=True)
+
+    # THEN
+    assert [event.data["reason"] for event in ended] == ["resumed", "schedule"]
+
+
+async def test_a_hold_survives_a_reload(
+    hass: HomeAssistant, thermostat_calls: AsyncMock, freezer: FrozenDateTimeFactory
+) -> None:
+    # GIVEN
+    set_thermostat(hass)
+    set_rooms(hass)
+    entry = await _setup(hass)
+    await _hold(hass)
+    hold_ends = hass.states.get(HOLD_ENDS).state
+
+    # WHEN
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    # THEN
+    assert hass.states.get(STATE).state == "manual_hold"
+    assert hass.states.get(HOLD_ENDS).state == hold_ends

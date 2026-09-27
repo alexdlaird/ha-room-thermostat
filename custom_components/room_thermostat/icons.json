@@ -20,6 +20,9 @@
       },
       "control_state": {
         "default": "mdi:state-machine"
+      },
+      "hold_ends": {
+        "default": "mdi:timer-sand"
       }
     },
     "button": {

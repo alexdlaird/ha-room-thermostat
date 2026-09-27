@@ -57,7 +57,8 @@ Everything else is under **Configure** (saving reloads the integration):
 | --- | --- | --- |
 | Default room | reference room, else `average` | Room id, `average` or `extreme`; used outside schedule blocks. |
 | Schedule | none | A [Schedule helper](https://www.home-assistant.io/integrations/schedule/) (see below). |
-| When the thermostat is changed outside Home Assistant | Hold | **Hold** stops writing until the next schedule block or **Resume**. **Adopt** keeps the thermostat where it was put and moves the room target by the current offset. Either way a `room_thermostat_manual_change` event fires. |
+| When the thermostat is changed outside Home Assistant | Hold | **Hold** respects the change for the hold duration, then room control resumes (a new schedule block or **Resume** ends it sooner). **Adopt** keeps the thermostat where it was put and moves the room target by the current offset. Either way a `room_thermostat_manual_change` event fires. |
+| Hold duration | 120 min | A newer outside change restarts the clock. `0` holds until the next schedule block or **Resume**. |
 | Sensor stale after | 10 min | |
 | Maximum offset | 6 °F / 3.5 °C | |
 | Deadband | 0.5 °F / 0.3 °C | |
@@ -90,6 +91,7 @@ and listed on the *Control problem* sensor.
 | `sensor.<name>_room_error` | Room temperature minus its target (0 inside a heat_cool range). |
 | `sensor.<name>_room_offset` | The offset applied. Diagnostic. |
 | `sensor.<name>_commanded_heat_setpoint` / `_commanded_cool_setpoint` | What the real thermostat should be set to. Diagnostic. |
+| `sensor.<name>_hold_ends` | When the current manual hold ends (unknown when not holding). |
 | `sensor.<name>_control_state` | `controlling`, `fallback_reference`, `fallback_thermostat`, `manual_hold`, `idle`, `underlying_unavailable`. Diagnostic. |
 | `binary_sensor.<name>_control_problem` | On during any fallback, schedule data error, failed write or unavailable thermostat; `reasons` lists them. |
 | `button.<name>_resume` | Ends a hold. |
@@ -97,8 +99,15 @@ and listed on the *Control problem* sensor.
 ### Alerts
 
 The integration raises no notifications itself. Automate on `binary_sensor.<name>_control_problem`
-(and its `reasons`) and on the `room_thermostat_manual_change` event, which carries `policy`, `mode`,
-`heat` and `cool`.
+(and its `reasons`) and on two events:
+
+- `room_thermostat_manual_change`: `policy`, `mode`, `heat`, `cool`, and `hold_until` (ISO time, or
+  null when holding indefinitely or adopting).
+- `room_thermostat_hold_ended`: `reason` is `expired`, `resumed` or `schedule`.
+
+"Outside Home Assistant" means any setpoint change this integration did not make: the vendor's app,
+the thermostat's own screen, or the underlying climate entity. It is noticed at the underlying
+integration's next poll.
 
 ## Trying it without touching the thermostat
 

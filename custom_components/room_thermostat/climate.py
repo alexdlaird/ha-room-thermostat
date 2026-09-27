@@ -148,6 +148,7 @@ class RoomClimate(RoomThermostatEntity, ClimateEntity):
             "offset": snapshot.offset,
             "commanded_heat": snapshot.commanded.heat,
             "commanded_cool": snapshot.commanded.cool,
+            "hold_until": None if snapshot.hold_until is None else snapshot.hold_until.isoformat(),
             "thermostat": self.controller.climate_entity_id,
         }
 

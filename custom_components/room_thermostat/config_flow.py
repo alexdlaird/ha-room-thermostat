@@ -28,6 +28,7 @@ from .const import (
     CONF_CLIMATE_ENTITY,
     CONF_DEADBAND,
     CONF_DEFAULT_ROOM,
+    CONF_HOLD_DURATION,
     CONF_MANUAL_CHANGE_POLICY,
     CONF_MAX_OFFSET,
     CONF_MIN_WRITE_INTERVAL,
@@ -38,6 +39,7 @@ from .const import (
     CONF_SETPOINT_STEP,
     CONF_SMOOTHING,
     CONF_STALE_AFTER,
+    DEFAULT_HOLD_DURATION,
     DEFAULT_MIN_WRITE_INTERVAL,
     DEFAULT_SMOOTHING,
     DEFAULT_STALE_AFTER,
@@ -68,6 +70,7 @@ def default_options(hass: HomeAssistant) -> dict[str, Any]:
         CONF_SETPOINT_STEP: step,
         CONF_MINIMUM_RANGE: 0.0,
         CONF_MANUAL_CHANGE_POLICY: ManualChangePolicy.HOLD.value,
+        CONF_HOLD_DURATION: DEFAULT_HOLD_DURATION,
     }
 
 
@@ -167,6 +170,7 @@ class RoomThermostatOptionsFlow(OptionsFlowWithReload):
                         translation_key=CONF_MANUAL_CHANGE_POLICY,
                     )
                 ),
+                vol.Required(CONF_HOLD_DURATION): number(0, 1440, 5),
                 vol.Required(CONF_STALE_AFTER): number(1, 240, 1),
                 vol.Required(CONF_MAX_OFFSET): number(0, 20, 0.1),
                 vol.Required(CONF_DEADBAND): number(0, 5, 0.1),

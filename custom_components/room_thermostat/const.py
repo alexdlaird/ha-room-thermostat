@@ -24,6 +24,7 @@ CONF_SMOOTHING: Final = "smoothing_minutes"
 CONF_SETPOINT_STEP: Final = "setpoint_step"
 CONF_MINIMUM_RANGE: Final = "minimum_range"
 CONF_MANUAL_CHANGE_POLICY: Final = "manual_change_policy"
+CONF_HOLD_DURATION: Final = "hold_duration_minutes"
 
 #: Schedule block data keys.
 BLOCK_ROOM: Final = "room"
@@ -32,6 +33,8 @@ BLOCK_COOL: Final = "cool"
 
 #: Fired when the thermostat is changed outside Home Assistant.
 EVENT_MANUAL_CHANGE: Final = "room_thermostat_manual_change"
+#: Fired when a manual hold ends; `reason` is expired, resumed or schedule.
+EVENT_HOLD_ENDED: Final = "room_thermostat_hold_ended"
 
 #: How often freshness is re-checked when nothing else changes.
 EVALUATE_INTERVAL_SECONDS: Final = 60
@@ -39,6 +42,8 @@ EVALUATE_INTERVAL_SECONDS: Final = 60
 DEFAULT_STALE_AFTER: Final = 10
 DEFAULT_MIN_WRITE_INTERVAL: Final = 15
 DEFAULT_SMOOTHING: Final = 15
+#: Minutes a change made outside Home Assistant is respected before control resumes (0 = indefinitely).
+DEFAULT_HOLD_DURATION: Final = 120
 
 #: Unit-dependent defaults: (max offset, deadband, setpoint step).
 DEFAULTS_BY_UNIT: Final[dict[str, tuple[float, float, float]]] = {

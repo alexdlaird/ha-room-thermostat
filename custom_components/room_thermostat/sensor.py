@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
 from typing import TYPE_CHECKING, Final
 
 from homeassistant.components.sensor import (
@@ -30,7 +31,7 @@ PARALLEL_UPDATES = 0
 
 @dataclass(frozen=True, kw_only=True)
 class RoomSensorDescription(SensorEntityDescription):
-    value_fn: Callable[[Snapshot], StateType]
+    value_fn: Callable[[Snapshot], StateType | datetime]
     #: Differences (offset, error) carry the unit but must not be converted like absolute temperatures.
     difference: bool = False
 
@@ -73,6 +74,11 @@ SENSORS: Final[tuple[RoomSensorDescription, ...]] = (
         value_fn=lambda snapshot: snapshot.commanded.cool,
     ),
     RoomSensorDescription(
+        key="hold_ends",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        value_fn=lambda snapshot: snapshot.hold_until,
+    ),
+    RoomSensorDescription(
         key="control_state",
         device_class=SensorDeviceClass.ENUM,
         options=[state.value for state in ControlState],
@@ -100,5 +106,5 @@ class RoomSensor(RoomThermostatEntity, SensorEntity):
             self._attr_native_unit_of_measurement = controller.unit
 
     @property
-    def native_value(self) -> StateType:
+    def native_value(self) -> StateType | datetime:
         return self.entity_description.value_fn(self.controller.snapshot)

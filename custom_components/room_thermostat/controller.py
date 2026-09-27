@@ -52,6 +52,7 @@ from .const import (
     CONF_CLIMATE_ENTITY,
     CONF_DEADBAND,
     CONF_DEFAULT_ROOM,
+    CONF_HOLD_DURATION,
     CONF_MANUAL_CHANGE_POLICY,
     CONF_MAX_OFFSET,
     CONF_MIN_WRITE_INTERVAL,
@@ -62,12 +63,14 @@ from .const import (
     CONF_SETPOINT_STEP,
     CONF_SMOOTHING,
     CONF_STALE_AFTER,
+    DEFAULT_HOLD_DURATION,
     DEFAULT_MIN_WRITE_INTERVAL,
     DEFAULT_SMOOTHING,
     DEFAULT_STALE_AFTER,
     DEFAULTS_BY_UNIT,
     DOMAIN,
     EVALUATE_INTERVAL_SECONDS,
+    EVENT_HOLD_ENDED,
     EVENT_MANUAL_CHANGE,
 )
 from .control import (
@@ -130,6 +133,7 @@ class Snapshot:
     commanded: Setpoints = field(default_factory=Setpoints)
     error: float | None = None
     problems: tuple[str, ...] = ()
+    hold_until: datetime | None = None
 
 
 def room_id_for(entity_id: str) -> str:
@@ -213,6 +217,9 @@ class RoomThermostatController:
             minimum_range=float(options.get(CONF_MINIMUM_RANGE, 0.0)),
         )
         self.policy = ManualChangePolicy(options.get(CONF_MANUAL_CHANGE_POLICY, ManualChangePolicy.HOLD))
+        #: None holds until the next schedule block or Resume.
+        hold_minutes = float(options.get(CONF_HOLD_DURATION, DEFAULT_HOLD_DURATION))
+        self.hold_duration: timedelta | None = timedelta(minutes=hold_minutes) if hold_minutes > 0 else None
         self.default_selection = parse_selection(options.get(CONF_DEFAULT_ROOM), self.rooms) or (
             Selection.room(self.reference_id) if self.reference_id else Selection(Strategy.AVERAGE)
         )
@@ -220,6 +227,7 @@ class RoomThermostatController:
         self.selection = self.default_selection
         self.targets = Setpoints()
         self.hold = False
+        self.hold_until: datetime | None = None
         self.filters: dict[str, OffsetFilter] = {}
         self.block_signature: list[Any] | None = None
         self.last_commanded: Setpoints | None = None
@@ -305,7 +313,9 @@ class RoomThermostatController:
         if self.policy is ManualChangePolicy.ADOPT:
             self.targets = adopted_targets(mode, current, self.snapshot.offset or 0.0, self.targets)
         else:
+            # A further change during a hold restarts the clock: the latest setting gets the full window.
             self.hold = True
+            self.hold_until = None if self.hold_duration is None else dt_util.utcnow() + self.hold_duration
         _LOGGER.info("%s changed outside Home Assistant (%s): %s", self.climate_entity_id, self.policy, current)
         self.hass.bus.async_fire(
             EVENT_MANUAL_CHANGE,
@@ -316,6 +326,7 @@ class RoomThermostatController:
                 "mode": mode.value,
                 "heat": current.heat,
                 "cool": current.cool,
+                "hold_until": None if self.hold_until is None else self.hold_until.isoformat(),
             },
         )
         self._save()
@@ -356,7 +367,7 @@ class RoomThermostatController:
         else:
             self.selection = self.default_selection
             self._block_errors = ()
-        self.hold = False
+        self._end_hold("schedule")
         self._urgent = True
         self._save()
 
@@ -366,6 +377,10 @@ class RoomThermostatController:
     def evaluate(self) -> None:
         """Recompute everything and write the thermostat when the rules say so."""
         now = dt_util.utcnow()
+        if self.hold and self.hold_until is not None and now >= self.hold_until:
+            self._end_hold("expired")
+            self._urgent = True
+            self._save()
         underlying = self.hass.states.get(self.climate_entity_id)
         thermostat_temperature = (
             None
@@ -413,6 +428,7 @@ class RoomThermostatController:
                 commanded=commanded,
                 error=room_error(mode, room_temperature, self.targets),
                 problems=self._problems(choice.state),
+                hold_until=self.hold_until if self.hold else None,
             )
         )
 
@@ -515,8 +531,15 @@ class RoomThermostatController:
     async def async_resume(self) -> None:
         self._resume()
 
-    def _resume(self) -> None:
+    def _end_hold(self, reason: str) -> None:
+        """Leave a manual hold (if in one), telling listeners why."""
+        if self.hold:
+            self.hass.bus.async_fire(EVENT_HOLD_ENDED, {"entry_id": self.entry.entry_id, "reason": reason})
         self.hold = False
+        self.hold_until = None
+
+    def _resume(self) -> None:
+        self._end_hold("resumed")
         self._urgent = True
         self._save()
         self.evaluate()
@@ -550,6 +573,8 @@ class RoomThermostatController:
         targets = stored.get("targets") or {}
         self.targets = Setpoints(_float(targets.get("heat")), _float(targets.get("cool")))
         self.hold = bool(stored.get("hold", False))
+        hold_until = stored.get("hold_until")
+        self.hold_until = dt_util.parse_datetime(hold_until) if isinstance(hold_until, str) else None
         for room_id, (value, at) in (stored.get("filters") or {}).items():
             parsed = dt_util.parse_datetime(at) if isinstance(at, str) else None
             if room_id in self.rooms and _float(value) is not None and parsed is not None:
@@ -569,6 +594,7 @@ class RoomThermostatController:
             "selection": {"strategy": self.selection.strategy.value, "room_id": self.selection.room_id},
             "targets": {"heat": self.targets.heat, "cool": self.targets.cool},
             "hold": self.hold,
+            "hold_until": None if self.hold_until is None else self.hold_until.isoformat(),
             "filters": {
                 room_id: [offset.value, offset.updated_at.isoformat()]
                 for room_id, offset in self.filters.items()

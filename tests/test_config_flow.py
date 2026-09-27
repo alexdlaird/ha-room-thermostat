@@ -14,6 +14,7 @@ from custom_components.room_thermostat.const import (
     CONF_CLIMATE_ENTITY,
     CONF_DEADBAND,
     CONF_DEFAULT_ROOM,
+    CONF_HOLD_DURATION,
     CONF_MANUAL_CHANGE_POLICY,
     CONF_MAX_OFFSET,
     CONF_MIN_WRITE_INTERVAL,
@@ -66,6 +67,7 @@ async def test_user_flow_creates_an_entry_with_unit_defaults(hass: HomeAssistant
         CONF_SETPOINT_STEP: 0.5,
         CONF_MINIMUM_RANGE: 0.0,
         CONF_MANUAL_CHANGE_POLICY: "hold",
+        CONF_HOLD_DURATION: 120,
     }
 
 
