@@ -56,6 +56,7 @@ Everything else is under **Configure** (saving reloads the integration):
 | Option | Default | |
 | --- | --- | --- |
 | Rooms this thermostat doesn't heat or cool | none | Room sensors in parts of the house this system doesn't reach (e.g. a room with its own mini split). They are still reported (`room_thermostat/config` lists them with `followable: false`) but never followed: not selectable, not in presets or holds, not the reference or default room, and left out of `average` and `extreme`. |
+| Outdoor temperature sensor | none | Optional. Offered to apps for history next to the rooms (`room_thermostat/config` → `history`); not used for control. |
 | Default room | reference room, else `average` | Room id, `average` or `extreme`; used outside schedule blocks. |
 | Schedule | none | A [Schedule helper](https://www.home-assistant.io/integrations/schedule/) (see below). |
 | When the thermostat is changed outside Home Assistant | Hold | **Hold** respects the change for the hold duration, then room control resumes (a new schedule block or **Resume** ends it sooner). **Adopt** keeps the thermostat where it was put and moves the room target by the current offset. Either way a `room_thermostat_manual_change` event fires. |
@@ -91,8 +92,10 @@ ends (`reason`: `expired`, `resumed` or `schedule`).
 #### WebSocket API
 
 Each command takes `entity_id` (the room thermostat's climate entity) and answers with the
-thermostat's config: `revision`, `unit`, `setpoint_step`, `minimum_range`, `rooms`, `presets`,
-`schedule`, `active_preset`, `hold`, `selection`. The climate entity's `config_revision` attribute
+thermostat's config: `revision`, `unit`, `setpoint_step`, `minimum_range`, `rooms` (id, name, sensor
+`entity_id`, `followable`), `presets`, `schedule`, `active_preset`, `hold`, `selection`, and `history` (the entity
+ids an app charts: room, thermostat and commanded temperatures, the outdoor sensor, and the thermostat for its
+heating/cooling activity). The climate entity's `config_revision` attribute
 changes whenever presets or the schedule do.
 
 | Command | Data |
@@ -127,7 +130,8 @@ and listed on the *Control problem* sensor.
 | `sensor.<name>_room_temperature` | The temperature being controlled to. |
 | `sensor.<name>_room_error` | Room temperature minus its target (0 inside a heat_cool range). |
 | `sensor.<name>_room_offset` | The offset applied. Diagnostic. |
-| `sensor.<name>_commanded_heat_setpoint` / `_commanded_cool_setpoint` | What the real thermostat should be set to. Diagnostic. |
+| `sensor.<name>_thermostat_temperature` | The real thermostat's own reading (long-term statistics, for history next to the rooms). Diagnostic. |
+| `sensor.<name>_commanded_heat_setpoint` / `_commanded_cool_setpoint` | What the real thermostat should be set to (long-term statistics). Diagnostic. |
 | `sensor.<name>_schedule` | `not_configured` (no schedule: a normal state), `in_block` (always, with the built-in schedule), `between_blocks`, or `not_found` (a Schedule helper that is configured but missing, also a control problem). Attributes: `schedule_entity`, `next_change`. |
 | `sensor.<name>_hold_ends` | When the current manual hold ends (unknown when not holding). |
 | `sensor.<name>_control_state` | `controlling`, `fallback_reference`, `fallback_thermostat`, `manual_hold`, `idle`, `underlying_unavailable`. Diagnostic. |

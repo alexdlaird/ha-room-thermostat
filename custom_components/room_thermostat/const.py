@@ -28,6 +28,8 @@ CONF_HOLD_DURATION: Final = "hold_duration_minutes"
 #: Room sensors in the house that this thermostat does not heat or cool (e.g. a room with its own mini split):
 #: shown and recorded, never followed.
 CONF_UNSERVED_ROOMS: Final = "unserved_rooms"
+#: Optional outdoor temperature sensor, offered to apps for history alongside the rooms.
+CONF_OUTDOOR_SENSOR: Final = "outdoor_sensor"
 
 #: Schedule block data keys.
 BLOCK_ROOM: Final = "room"

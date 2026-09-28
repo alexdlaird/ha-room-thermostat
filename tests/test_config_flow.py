@@ -19,6 +19,7 @@ from custom_components.room_thermostat.const import (
     CONF_MAX_OFFSET,
     CONF_MIN_WRITE_INTERVAL,
     CONF_MINIMUM_RANGE,
+    CONF_OUTDOOR_SENSOR,
     CONF_REFERENCE_SENSOR,
     CONF_ROOM_SENSORS,
     CONF_SCHEDULE_ENTITY,
@@ -148,6 +149,7 @@ async def test_options_are_saved_and_reload_the_entry(hass: HomeAssistant, therm
         CONF_SCHEDULE_ENTITY: "schedule.rooms",
         CONF_MANUAL_CHANGE_POLICY: "adopt",
         CONF_MINIMUM_RANGE: 5.0,
+        CONF_OUTDOOR_SENSOR: "sensor.outdoor_temperature",
     }
 
     # WHEN
@@ -161,6 +163,7 @@ async def test_options_are_saved_and_reload_the_entry(hass: HomeAssistant, therm
     assert controller.schedule_entity_id == "schedule.rooms"
     assert controller.policy == "adopt"
     assert controller.settings.minimum_range == 5.0
+    assert controller.outdoor_entity_id == "sensor.outdoor_temperature"
 
 
 @pytest.mark.parametrize(

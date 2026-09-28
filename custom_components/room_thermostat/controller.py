@@ -41,6 +41,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import CALLBACK_TYPE, Context, Event, EventStateChangedData, HomeAssistant, State, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
@@ -59,6 +60,7 @@ from .const import (
     CONF_MAX_OFFSET,
     CONF_MIN_WRITE_INTERVAL,
     CONF_MINIMUM_RANGE,
+    CONF_OUTDOOR_SENSOR,
     CONF_REFERENCE_SENSOR,
     CONF_ROOM_SENSORS,
     CONF_SCHEDULE_ENTITY,
@@ -166,6 +168,8 @@ class Snapshot:
     schedule_next_change: datetime | None = None
     #: The hold set through Home Assistant (dial, preset, app), if any.
     override: Hold | None = None
+    #: The real thermostat's own reading (unit-converted), for history next to the rooms.
+    thermostat_temperature: float | None = None
 
 
 def room_id_for(entity_id: str) -> str:
@@ -242,6 +246,7 @@ class RoomThermostatController:
             (rid for rid, eid in self.rooms.items() if eid == reference and rid not in self.unserved), None
         )
         self.schedule_entity_id: str | None = options.get(CONF_SCHEDULE_ENTITY) or None
+        self.outdoor_entity_id: str | None = options.get(CONF_OUTDOOR_SENSOR) or None
         self.settings = Settings(
             stale_after=timedelta(minutes=float(options.get(CONF_STALE_AFTER, DEFAULT_STALE_AFTER))),
             max_offset=float(options.get(CONF_MAX_OFFSET, max_offset)),
@@ -532,6 +537,7 @@ class RoomThermostatController:
                 error=room_error(mode, room_temperature, self.targets),
                 problems=self._problems(choice.state),
                 hold_until=self.hold_until if self.hold else None,
+                thermostat_temperature=thermostat_temperature,
             )
         )
 
@@ -710,14 +716,36 @@ class RoomThermostatController:
             "setpoint_step": self.settings.setpoint_step,
             "minimum_range": self.settings.minimum_range,
             "rooms": [
-                {"id": room_id, "name": name, "followable": room_id not in self.unserved}
+                {
+                    "id": room_id,
+                    "name": name,
+                    "entity_id": self.rooms[room_id],
+                    "followable": room_id not in self.unserved,
+                }
                 for room_id, name in self.room_names.items()
             ],
+            "history": self._history_entities(),
             "presets": [preset_to_dict(preset) for preset in self.presets.values()],
             "schedule": schedule_to_list(self.schedule),
             "active_preset": self.active_preset,
             "hold": hold_to_dict(self.override),
             "selection": selection_to_str(self.selection),
+        }
+
+    def _history_entities(self) -> dict[str, str | None]:
+        """Entity ids an app charts next to the rooms: this thermostat's own series plus the optional outdoor sensor."""
+        registry = er.async_get(self.hass)
+
+        def own(key: str) -> str | None:
+            return registry.async_get_entity_id("sensor", DOMAIN, f"{self.entry.entry_id}-{key}")
+
+        return {
+            "room_temperature": own("room_temperature"),
+            "thermostat_temperature": own("thermostat_temperature"),
+            "commanded_heat": own("commanded_heat"),
+            "commanded_cool": own("commanded_cool"),
+            "outdoor_temperature": self.outdoor_entity_id,
+            "thermostat": self.climate_entity_id,
         }
 
     def _config_changed(self) -> None:

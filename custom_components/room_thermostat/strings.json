@@ -44,7 +44,8 @@
           "setpoint_step": "Setpoint step",
           "minimum_range": "Minimum heat/cool range",
           "hold_duration_minutes": "Hold duration (minutes)",
-          "unserved_rooms": "Rooms this thermostat doesn't heat or cool"
+          "unserved_rooms": "Rooms this thermostat doesn't heat or cool",
+          "outdoor_sensor": "Outdoor temperature sensor (optional)"
         },
         "data_description": {
           "default_room": "Room id, average or extreme. Used outside schedule blocks. Defaults to the reference room, else the average.",
@@ -58,7 +59,8 @@
           "setpoint_step": "Commanded setpoints are rounded to this step.",
           "minimum_range": "Smallest heat_cool range your thermostat accepts (its heat/cool deadband). 0 if it has none.",
           "hold_duration_minutes": "How long a change made outside Home Assistant is respected before room control takes over again. A newer change restarts the clock. 0 holds until the next schedule block or Resume.",
-          "unserved_rooms": "Room sensors from the list above in parts of the house this system doesn't reach (e.g. a room with its own mini split). Their temperatures are still shown and recorded, but they are never followed and don't count toward average or most off target."
+          "unserved_rooms": "Room sensors from the list above in parts of the house this system doesn't reach (e.g. a room with its own mini split). Their temperatures are still shown and recorded, but they are never followed and don't count toward average or most off target.",
+          "outdoor_sensor": "Offered to apps for history next to the rooms; not used for control."
         }
       }
     },
@@ -122,6 +124,9 @@
           "between_blocks": "Between blocks",
           "not_found": "Schedule not found"
         }
+      },
+      "thermostat_temperature": {
+        "name": "Thermostat temperature"
       }
     },
     "binary_sensor": {

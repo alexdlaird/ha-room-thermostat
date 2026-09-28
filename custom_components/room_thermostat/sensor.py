@@ -60,8 +60,17 @@ SENSORS: Final[tuple[RoomSensorDescription, ...]] = (
         value_fn=lambda snapshot: None if snapshot.error is None else round(snapshot.error, 2),
     ),
     RoomSensorDescription(
+        key="thermostat_temperature",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda snapshot: snapshot.thermostat_temperature,
+    ),
+    RoomSensorDescription(
         key="commanded_heat",
         device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda snapshot: snapshot.commanded.heat,
@@ -69,6 +78,7 @@ SENSORS: Final[tuple[RoomSensorDescription, ...]] = (
     RoomSensorDescription(
         key="commanded_cool",
         device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda snapshot: snapshot.commanded.cool,

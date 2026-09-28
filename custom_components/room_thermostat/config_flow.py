@@ -33,6 +33,7 @@ from .const import (
     CONF_MAX_OFFSET,
     CONF_MIN_WRITE_INTERVAL,
     CONF_MINIMUM_RANGE,
+    CONF_OUTDOOR_SENSOR,
     CONF_REFERENCE_SENSOR,
     CONF_ROOM_SENSORS,
     CONF_SCHEDULE_ENTITY,
@@ -183,6 +184,7 @@ class RoomThermostatOptionsFlow(OptionsFlowWithReload):
                     SelectSelectorConfig(options=room_choices, mode=SelectSelectorMode.DROPDOWN, custom_value=True)
                 ),
                 vol.Optional(CONF_SCHEDULE_ENTITY): EntitySelector(EntitySelectorConfig(domain="schedule")),
+                vol.Optional(CONF_OUTDOOR_SENSOR): REFERENCE_SELECTOR,
                 vol.Required(CONF_MANUAL_CHANGE_POLICY): SelectSelector(
                     SelectSelectorConfig(
                         options=[policy.value for policy in ManualChangePolicy],

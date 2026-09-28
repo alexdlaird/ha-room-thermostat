@@ -83,7 +83,12 @@ async def test_presets_and_holds_cannot_follow_an_unserved_room(
     assert held["error"]["code"] == "invalid_format"
     with pytest.raises(PlanError, match="unknown room"):
         entry.runtime_data.async_save_presets(presets)
-    assert config["result"]["rooms"][2] == {"id": "bed", "name": "Bed", "followable": False}
+    assert config["result"]["rooms"][2] == {
+        "id": "bed",
+        "name": "Bed",
+        "entity_id": BED,
+        "followable": False,
+    }
 
 
 async def test_a_stored_choice_of_a_room_that_became_unserved_falls_back(

@@ -26,7 +26,7 @@ from pytest_homeassistant_custom_component.typing import WebSocketGenerator
 from custom_components.room_thermostat.const import CONF_SCHEDULE_ENTITY, EVENT_OVERRIDE_ENDED
 from custom_components.room_thermostat.planner import Hold, HoldKind, parse_hold
 
-from .conftest import ROOM_CLIMATE, THERMOSTAT, make_entry, set_rooms, set_thermostat, setup_entry
+from .conftest import BED, LIVING, OFFICE, ROOM_CLIMATE, THERMOSTAT, make_entry, set_rooms, set_thermostat, setup_entry
 
 SCHEDULE_HELPER = "schedule.rooms"
 
@@ -412,10 +412,19 @@ async def test_config_describes_rooms_presets_and_the_week(
     result = response["result"]
     assert result["unit"] == "°F"
     assert result["rooms"] == [
-        {"id": "living", "name": "Living", "followable": True},
-        {"id": "office", "name": "Office", "followable": True},
-        {"id": "bed", "name": "Bed", "followable": True},
+        {"id": "living", "name": "Living", "entity_id": LIVING, "followable": True},
+        {"id": "office", "name": "Office", "entity_id": OFFICE, "followable": True},
+        {"id": "bed", "name": "Bed", "entity_id": BED, "followable": True},
     ]
+    assert result["history"] == {
+        "room_temperature": "sensor.house_room_room_temperature",
+        "thermostat_temperature": "sensor.house_room_thermostat_temperature",
+        "commanded_heat": "sensor.house_room_commanded_heat_setpoint",
+        "commanded_cool": "sensor.house_room_commanded_cool_setpoint",
+        "outdoor_temperature": None,
+        "thermostat": THERMOSTAT,
+    }
+    assert hass.states.get("sensor.house_room_thermostat_temperature").state == "63.9"
     assert [preset["name"] for preset in result["presets"]] == ["Home", "Away", "Sleep"]
     assert result["schedule"] == [[]] * 7
     assert result["selection"] == "bed"
