@@ -13,6 +13,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 import logging
+import math
 from typing import TYPE_CHECKING, Any, Final
 
 from homeassistant.components.climate.const import (
@@ -105,6 +106,7 @@ from .control import (
     parse_block,
     parse_selection,
     room_error,
+    round_to_step,
     write_allowed,
 )
 from .health_monitor import HealthMonitor, Watched
@@ -313,6 +315,7 @@ class RoomThermostatController:
         if self.targets.heat is None or self.targets.cool is None:
             self.targets = self._initial_targets(underlying)
         self._ensure_built_in_presets()
+        self._snap_to_step()
         self._previous_mode = live_mode(underlying)
         self._previous_setpoints = current_setpoints(underlying, self._previous_mode)
 
@@ -856,6 +859,24 @@ class RoomThermostatController:
         if cool is None:
             cool = heat + gap
         return Setpoints(heat, cool)
+
+    def _snap_to_step(self) -> None:
+        """Targets and presets on the setpoint step (whole degrees by default), e.g. a Home preset seeded from a
+        thermostat set to 68.5, or values saved before the step changed. Keeps the minimum range."""
+        if self.targets.heat is not None and self.targets.cool is not None:
+            self.targets = Setpoints(*self._stepped(self.targets.heat, self.targets.cool))
+        for preset_id, preset in list(self.presets.items()):
+            heat, cool = self._stepped(preset.heat, preset.cool)
+            if (heat, cool) != (preset.heat, preset.cool):
+                self.presets[preset_id] = replace(preset, heat=heat, cool=cool)
+
+    def _stepped(self, heat: float, cool: float) -> tuple[float, float]:
+        step = self.settings.setpoint_step
+        minimum = self.settings.minimum_range
+        heat, cool = round_to_step(heat, step), round_to_step(cool, step)
+        if cool - heat < minimum:
+            cool = heat + (math.ceil(minimum / step) * step if step > 0 else minimum)
+        return heat, cool
 
     def _ensure_built_in_presets(self) -> None:
         """New installs (and upgrades) get Home (today's targets), Away and Sleep."""

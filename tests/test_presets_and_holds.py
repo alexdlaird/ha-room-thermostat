@@ -23,7 +23,7 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 from pytest_homeassistant_custom_component.typing import WebSocketGenerator
 
-from custom_components.room_thermostat.const import CONF_SCHEDULE_ENTITY, EVENT_OVERRIDE_ENDED
+from custom_components.room_thermostat.const import CONF_SCHEDULE_ENTITY, CONF_SETPOINT_STEP, EVENT_OVERRIDE_ENDED
 from custom_components.room_thermostat.planner import Hold, HoldKind, parse_hold
 
 from .conftest import BED, LIVING, OFFICE, ROOM_CLIMATE, THERMOSTAT, make_entry, set_rooms, set_thermostat, setup_entry
@@ -89,6 +89,18 @@ async def test_a_new_room_thermostat_offers_home_away_and_sleep(
     assert state.attributes["preset_modes"] == ["Home", "Away", "Sleep"]
     assert state.attributes[ATTR_PRESET_MODE] is None
     assert state.attributes["config_revision"] == 0
+
+
+async def test_presets_and_targets_snap_to_the_setpoint_step(hass: HomeAssistant, thermostat_calls: AsyncMock) -> None:
+    # WHEN
+    entry = await _setup(hass, **{CONF_SETPOINT_STEP: 1.0})
+
+    # THEN
+    controller = entry.runtime_data
+    home = controller.presets["home"]
+    assert (home.heat, home.cool) == (55.0, 68.0), "Home was seeded from a thermostat set to 55-68.5"
+    assert (controller.targets.heat, controller.targets.cool) == (55.0, 68.0)
+    assert all(float(p.heat).is_integer() and float(p.cool).is_integer() for p in controller.presets.values())
 
 
 async def test_choosing_a_preset_sets_its_room_and_targets(hass: HomeAssistant, thermostat_calls: AsyncMock) -> None:
