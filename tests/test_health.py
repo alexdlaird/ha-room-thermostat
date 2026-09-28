@@ -90,6 +90,37 @@ def test_the_same_value_for_hours_is_flat_when_the_sensor_usually_moves() -> Non
     assert still == {}, "a sensor that never moves is not flat"
 
 
+def test_an_issue_knows_when_it_began_before_it_was_noticed() -> None:
+    # GIVEN
+    watch = _watch()
+    changed = NOW - FLAT_AFTER - timedelta(hours=1)
+
+    # WHEN
+    watch.check(_fresh(68.2, changed_ago=FLAT_AFTER + timedelta(hours=1)), NOW, 14)
+
+    # THEN
+    assert watch.since[IssueKind.FLAT] == changed
+
+
+def test_flat_is_judged_against_how_the_sensor_moves_at_that_time_of_day() -> None:
+    # GIVEN
+    stats = [
+        HourlyStat(stat.start, stat.mean, stat.mean, stat.mean + (0.0 if stat.start.hour < 6 else 2.0))
+        for stat in _history(14)
+    ]
+    watch = SensorWatch(jump_floor=10.0, margin=6.0)
+    watch.baseline = learn(stats)
+    stuck = _fresh(64, changed_ago=FLAT_AFTER + timedelta(hours=1))
+
+    # WHEN
+    overnight = watch.check(stuck, NOW, local_hour=3)
+    afternoon = watch.check(stuck, NOW, local_hour=15)
+
+    # THEN
+    assert IssueKind.FLAT not in overnight, "humidity that never moves overnight isn't stuck at 3 AM"
+    assert IssueKind.FLAT in afternoon
+
+
 def test_a_jump_far_bigger_than_the_sensor_moves_is_jumpy_for_a_while() -> None:
     # GIVEN
     watch = _watch()

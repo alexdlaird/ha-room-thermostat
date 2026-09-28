@@ -3,7 +3,7 @@
 Pure rules, no Home Assistant state. A baseline is learned per sensor from its hourly statistics (mean, min, max):
 for each hour of the day, the band its hourly means usually fall in, and how much it usually moves within an hour.
 A sensor then looks wrong when it is **stale** (no readings), **flat** (the same value for hours though it normally
-moves), **jumpy** (a change between readings far bigger than it ever makes) or **unusual** (well outside its band for
+moves at that time of day), **jumpy** (a change between readings far bigger than it ever makes) or **unusual** (well outside its band for
 that hour, for a while). Rooms swing differently, so every threshold is relative to that sensor's own history.
 """
 
@@ -54,6 +54,8 @@ class Baseline:
     #: Its median movement within an hour (max - min).
     movement: float
     days: int
+    #: Hour of day (0-23) -> its median movement in that hour (a closed room's humidity barely moves overnight).
+    movement_by_hour: dict[int, float] = field(default_factory=dict)
 
     @property
     def learned(self) -> bool:
@@ -65,6 +67,10 @@ class Baseline:
         low, high = self.bands[hour]
         widen = max(margin, (high - low) * 0.5)
         return low - widen, high + widen
+
+    def movement_at(self, hour: int) -> float:
+        """How much it usually moves in this hour of the day (the all-day median when that hour isn't learned)."""
+        return self.movement_by_hour.get(hour, self.movement)
 
     def jump_threshold(self, floor: float) -> float:
         """A change between two readings bigger than this is not how the sensor moves."""
@@ -81,15 +87,22 @@ def learn(stats: Iterable[HourlyStat]) -> Baseline:
     """A baseline from hourly statistics: per hour of day, the 5th-95th percentile of its hourly means."""
     by_hour: dict[int, list[float]] = {}
     movements: list[float] = []
+    movements_by_hour: dict[int, list[float]] = {}
     days: set[tuple[int, int, int]] = set()
     for stat in stats:
         by_hour.setdefault(stat.start.hour, []).append(stat.mean)
         movements.append(max(0.0, stat.high - stat.low))
+        movements_by_hour.setdefault(stat.start.hour, []).append(max(0.0, stat.high - stat.low))
         days.add((stat.start.year, stat.start.month, stat.start.day))
     bands = {
         hour: (_quantile(means, 0.05), _quantile(means, 0.95)) for hour, means in by_hour.items() if len(means) >= 3
     }
-    return Baseline(bands=bands, movement=median(movements) if movements else 0.0, days=len(days))
+    return Baseline(
+        bands=bands,
+        movement=median(movements) if movements else 0.0,
+        days=len(days),
+        movement_by_hour={hour: median(values) for hour, values in movements_by_hour.items() if len(values) >= 3},
+    )
 
 
 @dataclass(frozen=True)
@@ -116,6 +129,10 @@ class SensorWatch:
     jump_reason: str = ""
     last_value: float | None = None
     issues: dict[IssueKind, str] = field(default_factory=dict)
+    #: When each current issue actually began (the last reading, the last change, the jump, leaving the band), which
+    #: is earlier than when it was noticed.
+    since: dict[IssueKind, datetime | None] = field(default_factory=dict)
+    jumped_at: datetime | None = None
 
     def observe(self, value: float | None, now: datetime) -> None:
         """A new reading: remember it, and flag a jump far bigger than the sensor ever moves."""
@@ -127,6 +144,7 @@ class SensorWatch:
         change = value - previous
         if abs(change) > baseline.jump_threshold(self.jump_floor):
             self.jumpy_until = now + JUMPY_HOLD
+            self.jumped_at = now
             self.jump_reason = (
                 f"jumped {change:+.1f} between readings; it usually moves {baseline.movement:.1f} an hour"
             )
@@ -134,7 +152,9 @@ class SensorWatch:
     def check(self, reading: Reading, now: datetime, local_hour: int) -> dict[IssueKind, str]:
         """The issues this sensor has right now, each with a human reason."""
         issues: dict[IssueKind, str] = {}
+        self.since = {}
         if reading.reported is None or now - reading.reported >= STALE_AFTER:
+            self.since[IssueKind.STALE] = reading.reported
             minutes = None if reading.reported is None else int((now - reading.reported).total_seconds() // 60)
             issues[IssueKind.STALE] = "no readings" if minutes is None else f"no readings for {minutes} minutes"
             self.outside_since = None
@@ -147,18 +167,22 @@ class SensorWatch:
         if (
             reading.changed is not None
             and now - reading.changed >= FLAT_AFTER
-            and baseline.movement >= self.jump_floor / 10
+            and baseline.movement_at(local_hour) >= self.jump_floor / 10
         ):
             hours = (now - reading.changed).total_seconds() / 3600
+            self.since[IssueKind.FLAT] = reading.changed
             issues[IssueKind.FLAT] = (
-                f"stuck at {reading.value:g} for {hours:.0f} hours; it usually moves {baseline.movement:.1f} an hour"
+                f"stuck at {reading.value:g} for {hours:.0f} hours; at this time of day it usually moves "
+                f"{baseline.movement_at(local_hour):.1f} an hour"
             )
         if self.jumpy_until is not None and now < self.jumpy_until:
             issues[IssueKind.JUMPY] = self.jump_reason
+            self.since[IssueKind.JUMPY] = self.jumped_at
         band = baseline.band(local_hour, self.margin)
         if band is not None and not band[0] <= reading.value <= band[1]:
             self.outside_since = self.outside_since or now
             if now - self.outside_since >= UNUSUAL_AFTER:
+                self.since[IssueKind.UNUSUAL] = self.outside_since
                 issues[IssueKind.UNUSUAL] = (
                     f"{reading.value:g} is outside its usual {band[0]:.0f}-{band[1]:.0f} for this time of day"
                 )

@@ -151,11 +151,13 @@ usually sits in for each hour of the day and how much it usually moves within an
 when it is:
 
 - **stale**: no readings for 30 minutes (checked from the start, before anything is learned);
-- **flat**: the same value for 4 hours, though it usually moves;
+- **flat**: the same value for 4 hours, though it usually moves at that time of day (learned per hour, so a room
+  that sits still overnight isn't flagged);
 - **jumpy**: a change between readings far bigger than it ever makes (held for an hour);
 - **unusual**: outside its usual band for that hour for 45 minutes.
 
-Flat, jumpy and unusual wait for 7 days of statistics. Issues are logged for 30 days.
+Flat, jumpy and unusual wait for 7 days of statistics. Issues are logged for 30 days, each with when it was noticed
+(`start`), when it actually began (`since`, e.g. the last change for flat) and when it ended.
 
 ### Alerts
 

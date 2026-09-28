@@ -145,7 +145,7 @@ class HealthMonitor:
             issues = watch.check(reading, now, hour)
             for kind, reason in issues.items():
                 if (entity_id, kind) not in self._open:
-                    self._raise(entity_id, kind, reason, now)
+                    self._raise(entity_id, kind, reason, now, watch.since.get(kind))
                     changed = True
             for key in [key for key in self._open if key[0] == entity_id and key[1] not in issues]:
                 self._clear(key, now)
@@ -156,7 +156,7 @@ class HealthMonitor:
             for update in list(self._listeners):
                 update()
 
-    def _raise(self, entity_id: str, kind: IssueKind, reason: str, now: datetime) -> None:
+    def _raise(self, entity_id: str, kind: IssueKind, reason: str, now: datetime, since: datetime | None) -> None:
         sensor = self.sensors[entity_id]
         record = {
             "entity_id": entity_id,
@@ -164,6 +164,7 @@ class HealthMonitor:
             "kind": kind.value,
             "reason": reason,
             "start": now.isoformat(),
+            "since": None if since is None else since.isoformat(),
             "end": None,
         }
         self._open[(entity_id, kind)] = record
