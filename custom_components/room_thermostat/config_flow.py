@@ -28,6 +28,7 @@ from .const import (
     CONF_CLIMATE_ENTITY,
     CONF_DEADBAND,
     CONF_DEFAULT_ROOM,
+    CONF_FAN_SPEED_ENTITY,
     CONF_HOLD_DURATION,
     CONF_MANUAL_CHANGE_POLICY,
     CONF_MAX_OFFSET,
@@ -185,6 +186,7 @@ class RoomThermostatOptionsFlow(OptionsFlowWithReload):
                 ),
                 vol.Optional(CONF_SCHEDULE_ENTITY): EntitySelector(EntitySelectorConfig(domain="schedule")),
                 vol.Optional(CONF_OUTDOOR_SENSOR): REFERENCE_SELECTOR,
+                vol.Optional(CONF_FAN_SPEED_ENTITY): EntitySelector(EntitySelectorConfig(domain="select")),
                 vol.Required(CONF_MANUAL_CHANGE_POLICY): SelectSelector(
                     SelectSelectorConfig(
                         options=[policy.value for policy in ManualChangePolicy],

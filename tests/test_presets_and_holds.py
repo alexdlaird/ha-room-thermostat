@@ -425,6 +425,7 @@ async def test_config_describes_rooms_presets_and_the_week(
         "thermostat": THERMOSTAT,
     }
     assert hass.states.get("sensor.house_room_thermostat_temperature").state == "63.9"
+    assert result["controls"] == {"fan_speed": None}
     assert [preset["name"] for preset in result["presets"]] == ["Home", "Away", "Sleep"]
     assert result["schedule"] == [[]] * 7
     assert result["selection"] == "bed"
@@ -507,6 +508,23 @@ async def test_fan_modes_pass_through_to_the_thermostat(hass: HomeAssistant, the
     assert state.attributes[ATTR_FAN_MODE] == "auto"
     fan_calls = [call.args[2] for call in thermostat_calls.call_args_list if call.args[1] == SERVICE_SET_FAN_MODE]
     assert fan_calls == [{ATTR_ENTITY_ID: THERMOSTAT, ATTR_FAN_MODE: "circulate"}]
+
+
+async def test_the_thermostats_humidity_and_fan_speed_selector_are_offered(
+    hass: HomeAssistant, thermostat_calls: AsyncMock, hass_ws_client: WebSocketGenerator
+) -> None:
+    # GIVEN
+    set_rooms(hass)
+    set_thermostat(hass, current_humidity=48)
+    await setup_entry(hass, make_entry(fan_speed_entity="select.house_fan_speed"))
+    client = await hass_ws_client(hass)
+
+    # WHEN
+    response = await _ws(client, "config")
+
+    # THEN
+    assert hass.states.get(ROOM_CLIMATE).attributes["current_humidity"] == 48
+    assert response["result"]["controls"] == {"fan_speed": "select.house_fan_speed"}
 
 
 async def test_a_thermostat_without_fan_modes_offers_none(hass: HomeAssistant, thermostat_calls: AsyncMock) -> None:

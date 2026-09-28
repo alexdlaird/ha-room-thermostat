@@ -30,6 +30,8 @@ CONF_HOLD_DURATION: Final = "hold_duration_minutes"
 CONF_UNSERVED_ROOMS: Final = "unserved_rooms"
 #: Optional outdoor temperature sensor, offered to apps for history alongside the rooms.
 CONF_OUTDOOR_SENSOR: Final = "outdoor_sensor"
+#: Optional select entity for the thermostat's fan speed (e.g. circulation speed), offered to apps as a setting.
+CONF_FAN_SPEED_ENTITY: Final = "fan_speed_entity"
 
 #: Schedule block data keys.
 BLOCK_ROOM: Final = "room"

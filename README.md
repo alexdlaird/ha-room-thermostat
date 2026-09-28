@@ -56,6 +56,7 @@ Everything else is under **Configure** (saving reloads the integration):
 | Option | Default | |
 | --- | --- | --- |
 | Rooms this thermostat doesn't heat or cool | none | Room sensors in parts of the house this system doesn't reach (e.g. a room with its own mini split). They are still reported (`room_thermostat/config` lists them with `followable: false`) but never followed: not selectable, not in presets or holds, not the reference or default room, and left out of `average` and `extreme`. |
+| Fan speed selector | none | Optional. A select entity for the thermostat's fan speed (e.g. circulation speed); `room_thermostat/config` → `controls.fan_speed` tells apps which one to offer. |
 | Outdoor temperature sensor | none | Optional. Offered to apps for history next to the rooms (`room_thermostat/config` → `history`); not used for control. |
 | Default room | reference room, else `average` | Room id, `average` or `extreme`; used outside schedule blocks. |
 | Schedule | none | A [Schedule helper](https://www.home-assistant.io/integrations/schedule/) (see below). |
@@ -93,7 +94,7 @@ ends (`reason`: `expired`, `resumed` or `schedule`).
 
 Each command takes `entity_id` (the room thermostat's climate entity) and answers with the
 thermostat's config: `revision`, `unit`, `setpoint_step`, `minimum_range`, `rooms` (id, name, sensor
-`entity_id`, `followable`), `presets`, `schedule`, `active_preset`, `hold`, `selection`, and `history` (the entity
+`entity_id`, `followable`), `presets`, `schedule`, `active_preset`, `hold`, `selection`, `controls` (`fan_speed`: an optional select entity), and `history` (the entity
 ids an app charts: room, thermostat and commanded temperatures, the outdoor sensor, and the thermostat for its
 heating/cooling activity). The climate entity's `config_revision` attribute
 changes whenever presets or the schedule do.
@@ -125,7 +126,7 @@ and listed on the *Control problem* sensor.
 
 | Entity | |
 | --- | --- |
-| `climate.<name>` | The room thermostat: current temperature is the room's, targets are room targets (single in heat/cool, a range in heat_cool). Modes, fan modes, action and limits mirror the real thermostat, and mode and fan changes pass straight through to it. Preset modes are the presets. Attributes include `preset_id`, `override` (the current hold: `kind`, `until`), `schedule_next_change` and `config_revision`. |
+| `climate.<name>` | The room thermostat: current temperature is the room's, targets are room targets (single in heat/cool, a range in heat_cool). Modes, fan modes, humidity, action and limits mirror the real thermostat, and mode and fan changes pass straight through to it. Preset modes are the presets. Attributes include `preset_id`, `override` (the current hold: `kind`, `until`), `schedule_next_change` and `config_revision`. |
 | `select.<name>_active_room` | Each room, *Average of all rooms*, *Room most off target* (coldest when heating, hottest when cooling, furthest outside the range in heat_cool). A choice stands until the next schedule block. |
 | `sensor.<name>_room_temperature` | The temperature being controlled to. |
 | `sensor.<name>_room_error` | Room temperature minus its target (0 inside a heat_cool range). |

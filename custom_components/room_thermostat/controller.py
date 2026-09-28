@@ -55,6 +55,7 @@ from .const import (
     CONF_CLIMATE_ENTITY,
     CONF_DEADBAND,
     CONF_DEFAULT_ROOM,
+    CONF_FAN_SPEED_ENTITY,
     CONF_HOLD_DURATION,
     CONF_MANUAL_CHANGE_POLICY,
     CONF_MAX_OFFSET,
@@ -247,6 +248,7 @@ class RoomThermostatController:
         )
         self.schedule_entity_id: str | None = options.get(CONF_SCHEDULE_ENTITY) or None
         self.outdoor_entity_id: str | None = options.get(CONF_OUTDOOR_SENSOR) or None
+        self.fan_speed_entity_id: str | None = options.get(CONF_FAN_SPEED_ENTITY) or None
         self.settings = Settings(
             stale_after=timedelta(minutes=float(options.get(CONF_STALE_AFTER, DEFAULT_STALE_AFTER))),
             max_offset=float(options.get(CONF_MAX_OFFSET, max_offset)),
@@ -725,6 +727,7 @@ class RoomThermostatController:
                 for room_id, name in self.room_names.items()
             ],
             "history": self._history_entities(),
+            "controls": {"fan_speed": self.fan_speed_entity_id},
             "presets": [preset_to_dict(preset) for preset in self.presets.values()],
             "schedule": schedule_to_list(self.schedule),
             "active_preset": self.active_preset,

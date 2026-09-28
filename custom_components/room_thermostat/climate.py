@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.climate import ClimateEntity
 from homeassistant.components.climate.const import (
+    ATTR_CURRENT_HUMIDITY,
     ATTR_FAN_MODE,
     ATTR_FAN_MODES,
     ATTR_HVAC_ACTION,
@@ -127,6 +128,13 @@ class RoomClimate(RoomThermostatEntity, ClimateEntity):
         state = self._underlying
         value = state.attributes.get(ATTR_HVAC_ACTION) if state else None
         return HVACAction(value) if value in {action.value for action in HVACAction} else None
+
+    @property
+    def current_humidity(self) -> float | None:
+        """The real thermostat's humidity reading, when it has one."""
+        state = self._underlying
+        value = state.attributes.get(ATTR_CURRENT_HUMIDITY) if state else None
+        return float(value) if isinstance(value, int | float) and not isinstance(value, bool) else None
 
     @property
     def current_temperature(self) -> float | None:

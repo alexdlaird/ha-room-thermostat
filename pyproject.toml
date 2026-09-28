@@ -1,6 +1,6 @@
 [project]
 name = "ha-room-thermostat"
-version = "0.6.0"
+version = "0.7.0"
 description = "Home Assistant integration: control any thermostat to the temperature of the room that matters"
 readme = "README.md"
 license = "MIT"
