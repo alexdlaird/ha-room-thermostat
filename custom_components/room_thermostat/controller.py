@@ -508,7 +508,10 @@ class RoomThermostatController:
             self.block_key = None
             self._apply_internal_schedule_if_changed(dt_util.utcnow())
         elif self.baseline is not None:
-            self.targets, self.selection, self.active_preset = self.baseline
+            targets, selection, preset = self.baseline
+            # Turning a preset off never "returns" to that same preset (a baseline taken while it was already on).
+            self.targets, self.selection = targets, selection
+            self.active_preset = None if preset == self.active_preset else preset
         self.baseline = None
 
     # --------------------------------------------------------------- evaluation
@@ -699,6 +702,8 @@ class RoomThermostatController:
                 translation_placeholders={"preset": preset_id},
             )
         self._start_override(hold, preset=True)
+        if self.baseline is not None and self.baseline[2] == preset_id:
+            self.baseline = (self.baseline[0], self.baseline[1], None)
         self._apply_preset(preset)
         self._resume()
 

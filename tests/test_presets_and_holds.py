@@ -104,6 +104,39 @@ async def test_built_in_presets_start_at_sensible_defaults_and_targets_snap_to_t
     assert (controller.targets.heat, controller.targets.cool) == (55.0, 68.0), "the thermostat was set to 55-68.5"
 
 
+async def test_a_preset_turns_off_even_when_it_was_on_before_it_was_chosen(
+    hass: HomeAssistant, thermostat_calls: AsyncMock
+) -> None:
+    # GIVEN
+    entry = await _setup(hass)
+    controller = entry.runtime_data
+    await controller.async_activate_preset("home")
+    controller.baseline = (controller.targets, controller.selection, "home")
+
+    # WHEN
+    await controller.async_resume()
+
+    # THEN
+    assert controller.active_preset is None, "a stale baseline naming the same preset must not keep it on"
+    assert controller.override is None
+
+
+async def test_choosing_the_preset_already_on_does_not_make_it_its_own_baseline(
+    hass: HomeAssistant, thermostat_calls: AsyncMock
+) -> None:
+    # GIVEN
+    entry = await _setup(hass)
+    controller = entry.runtime_data
+    controller.active_preset = "home"
+
+    # WHEN
+    await controller.async_activate_preset("home")
+
+    # THEN
+    assert controller.baseline is not None
+    assert controller.baseline[2] is None
+
+
 async def test_choosing_a_preset_sets_its_room_and_targets(hass: HomeAssistant, thermostat_calls: AsyncMock) -> None:
     # GIVEN
     entry = await _setup(hass)
