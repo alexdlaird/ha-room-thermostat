@@ -44,6 +44,7 @@ from homeassistant.core import CALLBACK_TYPE, Context, Event, EventStateChangedD
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
+from homeassistant.helpers.start import async_at_started
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 from homeassistant.util.unit_conversion import TemperatureConverter
@@ -106,6 +107,7 @@ from .control import (
     room_error,
     write_allowed,
 )
+from .health_monitor import HealthMonitor, Watched
 from .planner import (
     EMPTY_SCHEDULE,
     Hold,
@@ -252,6 +254,8 @@ class RoomThermostatController:
         self.schedule_entity_id: str | None = options.get(CONF_SCHEDULE_ENTITY) or None
         self.outdoor_entity_id: str | None = options.get(CONF_OUTDOOR_SENSOR) or None
         self.fan_speed_entity_id: str | None = options.get(CONF_FAN_SPEED_ENTITY) or None
+        self.health: HealthMonitor | None = None
+        self._health_listeners: list[CALLBACK_TYPE] = []
         self.settings = Settings(
             stale_after=timedelta(minutes=float(options.get(CONF_STALE_AFTER, DEFAULT_STALE_AFTER))),
             max_offset=float(options.get(CONF_MAX_OFFSET, max_offset)),
@@ -322,6 +326,33 @@ class RoomThermostatController:
         if not self.uses_internal_schedule:
             self._apply_schedule_if_changed()
         self.evaluate()
+        self.entry.async_on_unload(async_at_started(self.hass, self._async_start_health))
+
+    async def _async_start_health(self, _hass: HomeAssistant) -> None:
+        """Watch sensor health once every sensor has loaded, so a slow integration is not reported as stale."""
+        self.health = HealthMonitor(self.hass, self.entry, self.watched_sensors())
+        await self.health.async_start()
+        self.entry.async_on_unload(self.health.async_stop)
+        for update in list(self._health_listeners):
+            self.health.async_add_listener(update)
+            update()
+
+    @callback
+    def async_add_health_listener(self, update: CALLBACK_TYPE) -> None:
+        """Call [update] whenever sensor issues change (also once the monitor starts)."""
+        self._health_listeners.append(update)
+        if self.health is not None:
+            self.health.async_add_listener(update)
+
+    def watched_sensors(self) -> list[Watched]:
+        """Every room's temperature sensor, and its humidity sensor where there is one."""
+        names = self.room_names
+        watched: list[Watched] = []
+        for room_id, entity_id in self.rooms.items():
+            watched.append(Watched(entity_id, names[room_id], self.unit))
+            if humidity := self._humidity_sibling(entity_id):
+                watched.append(Watched(humidity, f"{names[room_id]} humidity", "%"))
+        return watched
 
     @callback
     def async_add_listener(self, update: CALLBACK_TYPE) -> Callable[[], None]:

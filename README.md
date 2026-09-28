@@ -106,6 +106,7 @@ changes whenever presets or the schedule do.
 | `room_thermostat/schedule/save` | `schedule`: seven day lists, Monday first, of `{time: "HH:MM", preset: id}`. |
 | `room_thermostat/set` | Any of `preset`, `heat`, `cool`, `room`, plus `hold`: `{kind: next_block}` (default), `{kind: minutes, minutes: N}` or `{kind: indefinite}`. |
 | `room_thermostat/resume` | |
+| `room_thermostat/sensor_issues` | Returns `active` (sensor issues now) and `log` (the last 30 days), each `{entity_id, name, kind, reason, start, end}`. |
 
 #### Schedule helper (alternative)
 
@@ -139,6 +140,21 @@ and listed on the *Control problem* sensor.
 | `sensor.<name>_control_state` | `controlling`, `fallback_reference`, `fallback_thermostat`, `manual_hold`, `idle`, `underlying_unavailable`. Diagnostic. |
 | `binary_sensor.<name>_control_problem` | On during any fallback, schedule data error, failed write or unavailable thermostat; `reasons` lists them. |
 | `button.<name>_resume` | Ends a hold and returns to the schedule. |
+| `sensor.<name>_sensor_issues` | How many room sensors look wrong now; `issues` lists them. Diagnostic. |
+
+### Sensor health
+
+Every room's temperature sensor, and its `sensor.<room>_humidity` when there is one, is watched against its own
+history. Each day the integration learns, from 30 days of the recorder's hourly statistics, the band each sensor
+usually sits in for each hour of the day and how much it usually moves within an hour. A sensor then has an issue
+when it is:
+
+- **stale**: no readings for 30 minutes (checked from the start, before anything is learned);
+- **flat**: the same value for 4 hours, though it usually moves;
+- **jumpy**: a change between readings far bigger than it ever makes (held for an hour);
+- **unusual**: outside its usual band for that hour for 45 minutes.
+
+Flat, jumpy and unusual wait for 7 days of statistics. Issues are logged for 30 days.
 
 ### Alerts
 
@@ -149,6 +165,8 @@ The integration raises no notifications itself. Automate on `binary_sensor.<name
   null when holding indefinitely or adopting).
 - `room_thermostat_hold_ended`: `reason` is `expired`, `resumed` or `schedule`.
 - `room_thermostat_override_ended`: a hold set through Home Assistant ended; same reasons.
+- `room_thermostat_sensor_issue`: a room sensor started or stopped looking wrong: `entity_id`, `name`, `kind`
+  (`stale`, `flat`, `jumpy`, `unusual`), `reason` (human readable) and `cleared`.
 
 "Outside Home Assistant" means any setpoint change this integration did not make: the vendor's app,
 the thermostat's own screen, or the underlying climate entity. It is noticed at the underlying

@@ -30,6 +30,9 @@
           "not_configured": "mdi:calendar-blank-outline",
           "not_found": "mdi:calendar-alert"
         }
+      },
+      "sensor_issues": {
+        "default": "mdi:thermometer-alert"
       }
     },
     "button": {

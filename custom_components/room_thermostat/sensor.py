@@ -118,7 +118,12 @@ async def async_setup_entry(
     entry: RoomThermostatConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    async_add_entities(RoomSensor(entry.runtime_data, description) for description in SENSORS)
+    async_add_entities(
+        [
+            *(RoomSensor(entry.runtime_data, description) for description in SENSORS),
+            SensorIssuesSensor(entry.runtime_data),
+        ]
+    )
 
 
 class RoomSensor(RoomThermostatEntity, SensorEntity):
@@ -143,3 +148,27 @@ class RoomSensor(RoomThermostatEntity, SensorEntity):
             "schedule_entity": self.controller.schedule_entity_id,
             "next_change": None if next_change is None else next_change.isoformat(),
         }
+
+
+class SensorIssuesSensor(RoomThermostatEntity, SensorEntity):
+    """How many room sensors look wrong right now (stale, flat, jumpy, unusual), with the issues as attributes."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, controller: RoomThermostatController) -> None:
+        super().__init__(controller, "sensor_issues")
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.controller.async_add_health_listener(self.async_write_ha_state)
+
+    @property
+    def native_value(self) -> int:
+        health = self.controller.health
+        return 0 if health is None else len(health.active)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        health = self.controller.health
+        return {"issues": [] if health is None else health.active}

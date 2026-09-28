@@ -30,7 +30,7 @@ ENTITY: dict[Any, Any] = {vol.Required("entity_id"): cv.entity_id}
 
 @callback
 def async_register(hass: HomeAssistant) -> None:
-    for command in (ws_config, ws_save_presets, ws_save_schedule, ws_set, ws_resume):
+    for command in (ws_config, ws_save_presets, ws_save_schedule, ws_set, ws_resume, ws_sensor_issues):
         async_register_command(hass, command)
 
 
@@ -138,3 +138,14 @@ async def ws_resume(hass: HomeAssistant, connection: ActiveConnection, msg: dict
     if controller := _controller(hass, connection, msg):
         await controller.async_resume()
         _config_result(connection, msg, controller)
+
+
+@websocket_command({vol.Required("type"): f"{DOMAIN}/sensor_issues", **ENTITY})
+@callback
+def ws_sensor_issues(hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]) -> None:
+    """Room sensors that look wrong now, and the last 30 days of such issues (each with start, end and a reason)."""
+    if controller := _controller(hass, connection, msg):
+        health = controller.health
+        connection.send_result(
+            msg["id"], {"active": [] if health is None else health.active, "log": [] if health is None else health.log}
+        )

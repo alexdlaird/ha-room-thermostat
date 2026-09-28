@@ -132,6 +132,9 @@
       },
       "thermostat_humidity": {
         "name": "Thermostat humidity"
+      },
+      "sensor_issues": {
+        "name": "Sensor issues"
       }
     },
     "binary_sensor": {

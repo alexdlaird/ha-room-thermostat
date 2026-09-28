@@ -1,6 +1,9 @@
 {
   "domain": "room_thermostat",
   "name": "Room Thermostat",
+  "after_dependencies": [
+    "recorder"
+  ],
   "codeowners": [
     "@alexdlaird"
   ],
@@ -13,5 +16,5 @@
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/alexdlaird/ha-room-thermostat/issues",
   "requirements": [],
-  "version": "0.7.0"
+  "version": "0.8.0"
 }

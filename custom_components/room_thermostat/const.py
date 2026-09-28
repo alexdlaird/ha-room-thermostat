@@ -44,6 +44,8 @@ EVENT_MANUAL_CHANGE: Final = "room_thermostat_manual_change"
 EVENT_HOLD_ENDED: Final = "room_thermostat_hold_ended"
 #: Fired when a hold set through Home Assistant (dial, preset, app) ends; `reason` is expired, resumed or schedule.
 EVENT_OVERRIDE_ENDED: Final = "room_thermostat_override_ended"
+#: Fired when a room sensor starts or stops looking wrong (stale, flat, jumpy, unusual); `cleared` tells which.
+EVENT_SENSOR_ISSUE: Final = "room_thermostat_sensor_issue"
 
 #: How often freshness is re-checked when nothing else changes.
 EVALUATE_INTERVAL_SECONDS: Final = 60
