@@ -412,16 +412,18 @@ async def test_config_describes_rooms_presets_and_the_week(
     result = response["result"]
     assert result["unit"] == "°F"
     assert result["rooms"] == [
-        {"id": "living", "name": "Living", "entity_id": LIVING, "followable": True},
-        {"id": "office", "name": "Office", "entity_id": OFFICE, "followable": True},
-        {"id": "bed", "name": "Bed", "entity_id": BED, "followable": True},
+        {"id": "living", "name": "Living", "entity_id": LIVING, "humidity_entity_id": None, "followable": True},
+        {"id": "office", "name": "Office", "entity_id": OFFICE, "humidity_entity_id": None, "followable": True},
+        {"id": "bed", "name": "Bed", "entity_id": BED, "humidity_entity_id": None, "followable": True},
     ]
     assert result["history"] == {
         "room_temperature": "sensor.house_room_room_temperature",
         "thermostat_temperature": "sensor.house_room_thermostat_temperature",
+        "thermostat_humidity": "sensor.house_room_thermostat_humidity",
         "commanded_heat": "sensor.house_room_commanded_heat_setpoint",
         "commanded_cool": "sensor.house_room_commanded_cool_setpoint",
         "outdoor_temperature": None,
+        "outdoor_humidity": None,
         "thermostat": THERMOSTAT,
     }
     assert hass.states.get("sensor.house_room_thermostat_temperature").state == "63.9"
@@ -516,15 +518,26 @@ async def test_the_thermostats_humidity_and_fan_speed_selector_are_offered(
     # GIVEN
     set_rooms(hass)
     set_thermostat(hass, current_humidity=48)
-    await setup_entry(hass, make_entry(fan_speed_entity="select.house_fan_speed"))
+    hass.states.async_set("sensor.living_humidity", "52")
+    hass.states.async_set("sensor.outdoor_temperature", "60")
+    hass.states.async_set("sensor.outdoor_humidity", "70")
+    await setup_entry(
+        hass,
+        make_entry(fan_speed_entity="select.house_fan_speed", outdoor_sensor="sensor.outdoor_temperature"),
+    )
     client = await hass_ws_client(hass)
 
     # WHEN
     response = await _ws(client, "config")
 
     # THEN
+    result = response["result"]
     assert hass.states.get(ROOM_CLIMATE).attributes["current_humidity"] == 48
-    assert response["result"]["controls"] == {"fan_speed": "select.house_fan_speed"}
+    assert hass.states.get("sensor.house_room_thermostat_humidity").state == "48.0"
+    assert result["controls"] == {"fan_speed": "select.house_fan_speed"}
+    assert result["rooms"][0]["humidity_entity_id"] == "sensor.living_humidity"
+    assert result["rooms"][1]["humidity_entity_id"] is None
+    assert result["history"]["outdoor_humidity"] == "sensor.outdoor_humidity"
 
 
 async def test_a_thermostat_without_fan_modes_offers_none(hass: HomeAssistant, thermostat_calls: AsyncMock) -> None:

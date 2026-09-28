@@ -16,6 +16,7 @@ import logging
 from typing import TYPE_CHECKING, Any, Final
 
 from homeassistant.components.climate.const import (
+    ATTR_CURRENT_HUMIDITY,
     ATTR_CURRENT_TEMPERATURE,
     ATTR_FAN_MODE,
     ATTR_HVAC_MODE,
@@ -171,6 +172,8 @@ class Snapshot:
     override: Hold | None = None
     #: The real thermostat's own reading (unit-converted), for history next to the rooms.
     thermostat_temperature: float | None = None
+    #: The real thermostat's humidity reading (%), when it reports one.
+    thermostat_humidity: float | None = None
 
 
 def room_id_for(entity_id: str) -> str:
@@ -540,6 +543,7 @@ class RoomThermostatController:
                 problems=self._problems(choice.state),
                 hold_until=self.hold_until if self.hold else None,
                 thermostat_temperature=thermostat_temperature,
+                thermostat_humidity=_float(attributes.get(ATTR_CURRENT_HUMIDITY)),
             )
         )
 
@@ -722,6 +726,7 @@ class RoomThermostatController:
                     "id": room_id,
                     "name": name,
                     "entity_id": self.rooms[room_id],
+                    "humidity_entity_id": self._humidity_sibling(self.rooms[room_id]),
                     "followable": room_id not in self.unserved,
                 }
                 for room_id, name in self.room_names.items()
@@ -745,11 +750,20 @@ class RoomThermostatController:
         return {
             "room_temperature": own("room_temperature"),
             "thermostat_temperature": own("thermostat_temperature"),
+            "thermostat_humidity": own("thermostat_humidity"),
             "commanded_heat": own("commanded_heat"),
             "commanded_cool": own("commanded_cool"),
             "outdoor_temperature": self.outdoor_entity_id,
+            "outdoor_humidity": self._humidity_sibling(self.outdoor_entity_id),
             "thermostat": self.climate_entity_id,
         }
+
+    def _humidity_sibling(self, temperature_entity_id: str | None) -> str | None:
+        """`sensor.bedroom_temperature` -> `sensor.bedroom_humidity`, when that sensor exists (same naming as rooms)."""
+        if temperature_entity_id is None or not temperature_entity_id.endswith("_temperature"):
+            return None
+        humidity = temperature_entity_id.removesuffix("_temperature") + "_humidity"
+        return humidity if self.hass.states.get(humidity) is not None else None
 
     def _config_changed(self) -> None:
         self.config_revision += 1

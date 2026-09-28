@@ -13,7 +13,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import EntityCategory
+from homeassistant.const import PERCENTAGE, EntityCategory
 
 from .control import ControlState, ScheduleStatus
 from .entity import RoomThermostatEntity
@@ -66,6 +66,15 @@ SENSORS: Final[tuple[RoomSensorDescription, ...]] = (
         suggested_display_precision=1,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda snapshot: snapshot.thermostat_temperature,
+    ),
+    RoomSensorDescription(
+        key="thermostat_humidity",
+        device_class=SensorDeviceClass.HUMIDITY,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=0,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda snapshot: snapshot.thermostat_humidity,
     ),
     RoomSensorDescription(
         key="commanded_heat",

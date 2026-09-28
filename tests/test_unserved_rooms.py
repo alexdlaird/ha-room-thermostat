@@ -87,6 +87,7 @@ async def test_presets_and_holds_cannot_follow_an_unserved_room(
         "id": "bed",
         "name": "Bed",
         "entity_id": BED,
+        "humidity_entity_id": None,
         "followable": False,
     }
 

@@ -94,7 +94,7 @@ ends (`reason`: `expired`, `resumed` or `schedule`).
 
 Each command takes `entity_id` (the room thermostat's climate entity) and answers with the
 thermostat's config: `revision`, `unit`, `setpoint_step`, `minimum_range`, `rooms` (id, name, sensor
-`entity_id`, `followable`), `presets`, `schedule`, `active_preset`, `hold`, `selection`, `controls` (`fan_speed`: an optional select entity), and `history` (the entity
+`entity_id`, `humidity_entity_id` when a matching `sensor.<room>_humidity` exists, `followable`), `presets`, `schedule`, `active_preset`, `hold`, `selection`, `controls` (`fan_speed`: an optional select entity), and `history` (the entity
 ids an app charts: room, thermostat and commanded temperatures, the outdoor sensor, and the thermostat for its
 heating/cooling activity). The climate entity's `config_revision` attribute
 changes whenever presets or the schedule do.
@@ -131,6 +131,7 @@ and listed on the *Control problem* sensor.
 | `sensor.<name>_room_temperature` | The temperature being controlled to. |
 | `sensor.<name>_room_error` | Room temperature minus its target (0 inside a heat_cool range). |
 | `sensor.<name>_room_offset` | The offset applied. Diagnostic. |
+| `sensor.<name>_thermostat_humidity` | The real thermostat's humidity, when it reports one (long-term statistics). Diagnostic. |
 | `sensor.<name>_thermostat_temperature` | The real thermostat's own reading (long-term statistics, for history next to the rooms). Diagnostic. |
 | `sensor.<name>_commanded_heat_setpoint` / `_commanded_cool_setpoint` | What the real thermostat should be set to (long-term statistics). Diagnostic. |
 | `sensor.<name>_schedule` | `not_configured` (no schedule: a normal state), `in_block` (always, with the built-in schedule), `between_blocks`, or `not_found` (a Schedule helper that is configured but missing, also a control problem). Attributes: `schedule_entity`, `next_change`. |

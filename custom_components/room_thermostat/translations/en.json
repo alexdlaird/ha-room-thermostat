@@ -129,6 +129,9 @@
       },
       "thermostat_temperature": {
         "name": "Thermostat temperature"
+      },
+      "thermostat_humidity": {
+        "name": "Thermostat humidity"
       }
     },
     "binary_sensor": {
