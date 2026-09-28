@@ -86,9 +86,8 @@ class PlanError(ValueError):
     """An invalid preset list, schedule or hold; `str()` is safe to show."""
 
 
-def default_presets(targets: Setpoints, selection: Selection, away: Setpoints, sleep: Setpoints) -> dict[str, Preset]:
-    """The built-ins a new room thermostat starts with: Home is whatever it runs today."""
-    home = Setpoints(targets.heat, targets.cool)
+def default_presets(home: Setpoints, selection: Selection, away: Setpoints, sleep: Setpoints) -> dict[str, Preset]:
+    """The built-ins a new room thermostat starts with."""
     return {
         HOME: Preset(HOME, BUILT_IN_NAMES[HOME], _required(home.heat), _required(home.cool), selection),
         AWAY: Preset(

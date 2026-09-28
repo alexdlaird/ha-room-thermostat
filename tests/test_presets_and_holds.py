@@ -91,16 +91,17 @@ async def test_a_new_room_thermostat_offers_home_away_and_sleep(
     assert state.attributes["config_revision"] == 0
 
 
-async def test_presets_and_targets_snap_to_the_setpoint_step(hass: HomeAssistant, thermostat_calls: AsyncMock) -> None:
+async def test_built_in_presets_start_at_sensible_defaults_and_targets_snap_to_the_step(
+    hass: HomeAssistant, thermostat_calls: AsyncMock
+) -> None:
     # WHEN
     entry = await _setup(hass, **{CONF_SETPOINT_STEP: 1.0})
 
     # THEN
     controller = entry.runtime_data
-    home = controller.presets["home"]
-    assert (home.heat, home.cool) == (55.0, 68.0), "Home was seeded from a thermostat set to 55-68.5"
-    assert (controller.targets.heat, controller.targets.cool) == (55.0, 68.0)
-    assert all(float(p.heat).is_integer() and float(p.cool).is_integer() for p in controller.presets.values())
+    presets = {preset_id: (p.heat, p.cool) for preset_id, p in controller.presets.items()}
+    assert presets == {"home": (68.0, 76.0), "away": (62.0, 82.0), "sleep": (65.0, 72.0)}
+    assert (controller.targets.heat, controller.targets.cool) == (55.0, 68.0), "the thermostat was set to 55-68.5"
 
 
 async def test_choosing_a_preset_sets_its_room_and_targets(hass: HomeAssistant, thermostat_calls: AsyncMock) -> None:
@@ -113,7 +114,7 @@ async def test_choosing_a_preset_sets_its_room_and_targets(hass: HomeAssistant, 
     )
 
     # THEN
-    assert _targets(entry) == (62.0, 80.0)
+    assert _targets(entry) == (62.0, 82.0)
     assert entry.runtime_data.selection.strategy == "average"
     state = hass.states.get(ROOM_CLIMATE)
     assert state.attributes[ATTR_PRESET_MODE] == "Away"
@@ -301,7 +302,7 @@ async def test_without_a_schedule_a_preset_is_a_toggle_over_the_normal_setting(
 
     # THEN
     assert controller.override == Hold(HoldKind.INDEFINITE)
-    assert _targets(entry) == (62.0, 80.0)
+    assert _targets(entry) == (62.0, 82.0)
     await controller.async_resume()
     assert _targets(entry) == (67.0, 73.0)
     assert controller.active_preset is None

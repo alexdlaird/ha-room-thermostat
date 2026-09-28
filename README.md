@@ -73,7 +73,8 @@ Everything else is under **Configure** (saving reloads the integration):
 ### Presets, schedule and holds
 
 Every room thermostat has presets: **Home**, **Away** and **Sleep** (built in; their targets and
-rooms are editable, and Home starts from what the thermostat runs today) plus any custom ones, such
+rooms are editable; they start at Home 68–76 °F, Away 62–82 °F and Sleep 65–72 °F, or 20–24.5 / 16.5–28 /
+18.5–22.5 °C) plus any custom ones, such
 as *Movie night*. A preset is a pair of room targets and the room(s) to follow. Choose one with
 `climate.set_preset_mode` (for example from a presence automation that switches to Away).
 

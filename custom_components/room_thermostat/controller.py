@@ -879,13 +879,9 @@ class RoomThermostatController:
         return heat, cool
 
     def _ensure_built_in_presets(self) -> None:
-        """New installs (and upgrades) get Home (today's targets), Away and Sleep."""
-        (away_heat, away_cool), (sleep_heat, sleep_cool) = PRESET_DEFAULTS_BY_UNIT.get(
-            self.unit, PRESET_DEFAULTS_BY_UNIT[UnitOfTemperature.CELSIUS]
-        )
-        defaults = default_presets(
-            self.targets, self.default_selection, Setpoints(away_heat, away_cool), Setpoints(sleep_heat, sleep_cool)
-        )
+        """New installs (and upgrades) get Home, Away and Sleep at sensible defaults for the unit."""
+        home, away, sleep = PRESET_DEFAULTS_BY_UNIT.get(self.unit, PRESET_DEFAULTS_BY_UNIT[UnitOfTemperature.CELSIUS])
+        defaults = default_presets(Setpoints(*home), self.default_selection, Setpoints(*away), Setpoints(*sleep))
         for preset_id, preset in defaults.items():
             self.presets.setdefault(preset_id, preset)
 

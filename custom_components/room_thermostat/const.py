@@ -57,9 +57,11 @@ DEFAULT_SMOOTHING: Final = 15
 DEFAULT_HOLD_DURATION: Final = 120
 
 #: Starting targets for the built-in Away and Sleep presets: ((away heat, away cool), (sleep heat, sleep cool)).
-PRESET_DEFAULTS_BY_UNIT: Final[dict[str, tuple[tuple[float, float], tuple[float, float]]]] = {
-    UnitOfTemperature.FAHRENHEIT: ((62.0, 80.0), (66.0, 76.0)),
-    UnitOfTemperature.CELSIUS: ((16.5, 26.5), (19.0, 24.5)),
+#: Built-in presets' (heat, cool) by unit: Home (comfortable), Away (saves energy, protects the house) and Sleep
+#: (cooler both ways, for sleeping).
+PRESET_DEFAULTS_BY_UNIT: Final[dict[str, tuple[tuple[float, float], tuple[float, float], tuple[float, float]]]] = {
+    UnitOfTemperature.FAHRENHEIT: ((68.0, 76.0), (62.0, 82.0), (65.0, 72.0)),
+    UnitOfTemperature.CELSIUS: ((20.0, 24.5), (16.5, 28.0), (18.5, 22.5)),
 }
 
 #: Unit-dependent defaults: (max offset, deadband, setpoint step).
